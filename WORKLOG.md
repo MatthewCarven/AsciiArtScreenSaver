@@ -75,3 +75,21 @@ Built the first working version of the ASCII Visualizer from scratch.
   G-cycle + run-loop smoke test passes against a reconstructed copy (the mirror
   is still stale for app.py/generative.py, so this was run via /tmp). Real files
   confirmed correct via read-back.
+
+### Webcam / video input
+- Added `asciiviz/video.py`: a `VideoSource` wrapping OpenCV `VideoCapture` for
+  a webcam (device index) or a video file. Converts each frame to the same
+  brightness/colour fields as the image source (reuses engine `_placement`),
+  mirrors the webcam like a selfie, loops video files, and throttles file
+  playback to the clip's native fps.
+- app.py: new "video" mode. `V` toggles the webcam; `--video PATH` / `--webcam
+  [INDEX]` start in video mode; the draw loop auto-releases the camera when you
+  switch to any other mode. HUD shows the active source.
+- OpenCV is an optional dependency — if it's missing, video is disabled with a
+  toast and the rest of the app is unaffected.
+- Verified: video.py standalone (fields for all palettes, file looping, bad
+  device handling) and full integration (play `--video`, palette/colour variants,
+  graceful no-camera fallback, `--video` run-loop selftest) via a clean /tmp
+  reconstruction; all 9 app.py edits confirmed on the real file by read-back.
+- Webcam live capture itself couldn't be tested here (no camera in the sandbox) —
+  Matthew to confirm the live feed.

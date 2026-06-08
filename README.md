@@ -15,7 +15,8 @@ palettes you can switch between live: **dots**, a **grayscale ramp**, and
 pip install -r requirements.txt
 ```
 
-Dependencies: `pygame`, `Pillow`, `numpy`.
+Dependencies: `pygame`, `Pillow`, `numpy`. The video/webcam source also needs
+`opencv-python` (optional — everything else runs without it).
 
 > **Braille palette note:** braille glyphs need a font that includes the Unicode
 > Braille Patterns block. **DejaVu Sans Mono** (very common; ships with many
@@ -31,11 +32,14 @@ python main.py --mode image          # start on the bundled sample image
 python main.py --image path/to/photo.jpg
 python main.py --palette braille --color
 python main.py --font-size 12 --density 0.5
+python main.py --webcam                  # live webcam as ASCII (needs opencv-python)
+python main.py --video path/to/clip.mp4  # play a video file as ASCII
 ```
 
-All options: `--image`, `--mode {generative,image}`, `--palette
-{dots,ramp,braille}`, `--color`, `--font-size`, `--density`, `--fps`,
-`--width`, `--height`. See `python main.py --help`.
+All options: `--image`, `--video`, `--webcam [INDEX]`, `--mode
+{generative,image,video}`, `--palette {dots,ramp,braille}`, `--color`,
+`--font-size`, `--density`, `--fps`, `--width`, `--height`. See
+`python main.py --help`.
 
 ## Controls
 
@@ -44,6 +48,7 @@ All options: `--image`, `--mode {generative,image}`, `--palette
 | `Tab` / `M`    | Switch mode (generative ⇄ image)                    |
 | `1` `2` `3`    | Palette: dots / ramp / braille                      |
 | `G`            | Cycle generative pattern (dotfield → plasma → ripples → flow → starfield) |
+| `V`            | Start / stop live webcam (video mode)               |
 | `C`            | Toggle colour (tint glyphs by source / brightness)  |
 | `Space`        | Pause / resume the animation                        |
 | `N` / `P` `→` `←` | Next / previous image (drops you into image mode) |
@@ -66,6 +71,15 @@ aspect (character cells are taller than they are wide, so this is corrected for
 you) and resolve in with a brief dissolve. For the cleanest photo conversions,
 try the **braille** palette (it packs 8 sub-dots per cell, the highest detail)
 or the **ramp** palette with `--color`.
+
+## Video & webcam
+
+Press `V` to start your webcam (or launch with `--webcam`), and the live feed is
+converted to ASCII in real time — try it with `--color` on the ramp or braille
+palette. Play a video file with `--video path/to/clip.mp4`; files loop when they
+reach the end. This needs `opencv-python` (`pip install opencv-python`); without
+it the app still runs and just tells you when you try to use video. Switching to
+any other mode — or pressing `V` again — releases the camera.
 
 ## How it works
 
@@ -93,6 +107,7 @@ asciiviz/
   patterns.py        # generative pattern functions (dot-field, plasma, ripples, flow, starfield)
   engine.py          # brightness-field -> glyphs; image loading
   generative.py      # drives the selected pattern; density/contrast shaping
+  video.py           # webcam / video-file capture via OpenCV
   renderer.py        # pygame fonts, cell grid, glyph blitting
   app.py             # window, input, modes, HUD, CLI
 images/              # drop images here; ships with a sample

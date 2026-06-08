@@ -19,6 +19,7 @@ from .engine import (
 )
 from .generative import GenerativeField
 from .renderer import Renderer
+from .video import VideoSource, VideoUnavailable
 
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"}
 _REVEAL_SECONDS = 1.4
@@ -57,6 +58,8 @@ class App:
         self.show_hud = True
         self.fps = opts.fps
         self.last_activity = time.monotonic()
+        self.video = None
+        self._video_adv = 0.0
 
         self.t = 0.0
         self.gen = GenerativeField(1, 1, self.renderer.cell_aspect, opts.density)
@@ -90,6 +93,10 @@ class App:
             self._begin_reveal()
         if self.palette == "braille" and not self.renderer.braille_ok:
             self._toast("No braille-capable font found — install DejaVu Sans Mono")
+        if getattr(opts, "video", None):
+            self._open_video(opts.video)
+        elif getattr(opts, "webcam", None) is not None:
+            self._open_video(int(opts.webcam))
 
     # ------------------------------------------------------------------ #
     # Setup helpers
@@ -212,6 +219,59 @@ class App:
             self._img_key = key
         self.screen.blit(self._img_surface, (0, 0))
 
+    # ------------------------------------------------------------------ #
+    # Video / webcam
+    # ------------------------------------------------------------------ #
+    def _open_video(self, source):
+        try:
+            if self.video is not None:
+                self.video.release()
+            self.video = VideoSource(source)
+            self.mode = "video"
+            self._video_adv = self.t
+            self._toast(f"video: {self.video.label}")
+        except VideoUnavailable as exc:
+            self.video = None
+            self.mode = "generative"
+            self._toast(str(exc))
+
+    def _stop_video(self):
+        if self.video is not None:
+            self.video.release()
+            self.video = None
+
+    def _draw_video(self):
+        if self.video is None:
+            self._draw_generative()
+            return
+        advance = (self.t - self._video_adv) >= self.video.frame_interval
+        if advance:
+            self._video_adv = self.t
+        braille = palettes.is_braille(self.palette)
+        data = self.video.fields(self.cols, self.rows, self.renderer.cell_aspect,
+                                 braille, advance=advance)
+        if data is None:
+            self._toast("video stream ended")
+            self._stop_video()
+            self.mode = "generative"
+            self._draw_generative()
+            return
+        field = data["field"]
+        if braille:
+            _, grid = field_to_braille(field, dither=True)
+            if self.color:
+                self.renderer.blit_grid_color(self.screen, grid, data["color"],
+                                              font=self.renderer.braille_font)
+            else:
+                self.renderer.blit_grid_mono(self.screen, grid,
+                                             font=self.renderer.braille_font)
+        else:
+            rows, grid = field_to_ramp(field, palettes.ramp_string(self.palette))
+            if self.color:
+                self.renderer.blit_grid_color(self.screen, grid, data["color"])
+            else:
+                self.renderer.blit_rows_mono(self.screen, rows)
+
     def _draw_hud(self):
         now = time.monotonic()
         idle = now - self.last_activity
@@ -228,12 +288,14 @@ class App:
         if self.mode == "image":
             p = self._current_image_path()
             lines.append(f"image: {p.name if p else '(none)'}  [{self.image_index % max(len(self.images),1) + 1}/{len(self.images)}]")
+        elif self.mode == "video":
+            lines.append(f"video: {self.video.label if self.video else '(none)'}")
         else:
             lines.append(f"pattern: {self.gen.pattern_name}")
         help_lines = [
-            "[Tab] mode  [G] pattern  [1/2/3] dots/ramp/braille  [C] color",
-            "[Space] pause  [N/P] image  [ [ / ] ] resolution  [+/-] density",
-            "[F] fullscreen  [S] save png  [H] hide HUD  [Esc/Q] quit",
+            "[Tab] mode  [G] pattern  [V] webcam  [1/2/3] palette",
+            "[C] color  [Space] pause  [N/P] image  [+/-] density",
+            "[ [ / ] ] resolution  [F] fullscreen  [S] save  [H] HUD  [Esc/Q] quit",
         ]
         if now < self.toast_until and self.toast_text:
             help_lines.append(f">> {self.toast_text}")
@@ -311,6 +373,12 @@ class App:
         elif key == pygame.K_g:
             self.mode = "generative"
             self._toast(f"pattern: {self.gen.next_pattern()}")
+        elif key == pygame.K_v:
+            if self.mode == "video":
+                self._stop_video()
+                self.mode = "generative"
+            else:
+                self._open_video(0)
         elif key == pygame.K_c:
             self.color = not self.color
             self._img_key = None
@@ -364,8 +432,12 @@ class App:
                     self.last_activity = time.monotonic()
 
             self.renderer.clear(self.screen)
+            if self.mode != "video" and self.video is not None:
+                self._stop_video()  # release the camera when leaving video mode
             if self.mode == "image":
                 self._draw_image()
+            elif self.mode == "video":
+                self._draw_video()
             else:
                 self._draw_generative()
             if self.show_hud:
@@ -385,7 +457,10 @@ def build_parser():
         description="ASCII Visualizer — generative dot-field + image-to-ASCII screensaver.",
     )
     p.add_argument("--image", help="path to an image to load on startup (switches to image mode)")
-    p.add_argument("--mode", choices=("generative", "image"), default="generative")
+    p.add_argument("--video", help="path to a video file to play as ASCII (switches to video mode)")
+    p.add_argument("--webcam", type=int, nargs="?", const=0,
+                   help="capture from a webcam device index (default 0)")
+    p.add_argument("--mode", choices=("generative", "image", "video"), default="generative")
     p.add_argument("--palette", choices=palettes.NAMES, default="dots")
     p.add_argument("--color", action="store_true", help="tint glyphs by source/brightness colour")
     p.add_argument("--font-size", type=int, default=16, dest="font_size",
@@ -402,6 +477,8 @@ def main(argv=None):
     opts = build_parser().parse_args(argv)
     if opts.image:
         opts.mode = "image"
+    if opts.video or opts.webcam is not None:
+        opts.mode = "video"
     App(opts).run()
 
 
