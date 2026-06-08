@@ -95,9 +95,18 @@ powershell -ExecutionPolicy Bypass -File build_screensaver.ps1
 `ASCIIVisualizer.scr`. Right-click it in Explorer and choose **Install** to
 preview and set it, or copy it into `C:\Windows\System32` so it shows up in
 Settings → Lock screen → Screen saver. It runs fullscreen, hides the cursor,
-auto-cycles through the generative patterns, and exits on any key or real mouse
-movement. (Preview in the tiny settings monitor isn't supported — it shows
-blank there; everything else works.)
+auto-cycles through the generative patterns, and quits on any key or real mouse
+movement.
+
+To stay quiet when you're away it winds down in phases: full speed for
+`--full-minutes` (default 5), then it throttles to `--idle-fps` (default 2) for
+`--throttle-minutes` (default 5), then it exits. So CPU and fans go near-silent,
+and Windows still powers off the display / sleeps on your own timers underneath
+— set "turn off display" to whatever you like (e.g. 45 min) and it just works.
+It does **not** hold the display awake by default; pass `--keep-display-awake`
+for an always-on "art mode" instead. (The built `.scr` bakes these in from the
+args list at the top of `screensaver.py` — edit and rebuild to change them.
+Preview in the tiny settings monitor isn't supported — it shows blank there.)
 
 ## How it works
 

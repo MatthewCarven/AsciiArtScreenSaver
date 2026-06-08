@@ -63,8 +63,17 @@ def main(argv=None):
         return
 
     # mode == "s": run the visualizer in fullscreen screensaver mode.
+    # Tweak these timings to taste, then rebuild the .scr (Windows can't pass
+    # command-line options to a screensaver itself, so they're baked in here):
+    args = [
+        "--screensaver",
+        "--full-minutes", "5",      # full-speed animation while you might watch
+        "--throttle-minutes", "5",  # then near-idle (low CPU) for a bit
+        "--idle-fps", "2",          # frame rate during the throttle phase
+        # "--keep-display-awake",   # uncomment for always-on "art mode"
+    ]
     from asciiviz.app import build_parser, App
-    opts = build_parser().parse_args(["--screensaver"])
+    opts = build_parser().parse_args(args)
     App(opts).run()
 
 

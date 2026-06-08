@@ -32,6 +32,27 @@ _GEN_LOW = np.array([36, 54, 110], dtype=np.float32)
 _GEN_HIGH = np.array([196, 214, 255], dtype=np.float32)
 
 
+def _set_display_awake(enabled):
+    """Keep the monitor awake while the screensaver runs (Windows only).
+
+    Uses SetThreadExecutionState — the documented kernel32 call media players
+    use to hold the display on — so the screensaver stays visible without you
+    disabling Windows' "turn off display" power setting. The state is per-thread
+    and Windows releases it automatically when the process exits, but we also
+    clear it explicitly on a clean exit. No-op on non-Windows or if unavailable.
+    """
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+        ES_CONTINUOUS = 0x80000000
+        ES_DISPLAY_REQUIRED = 0x00000002
+        ctypes.windll.kernel32.SetThreadExecutionState(
+            ES_CONTINUOUS | (ES_DISPLAY_REQUIRED if enabled else 0))
+    except Exception:
+        pass
+
+
 class App:
     def __init__(self, opts):
         pygame.init()
@@ -99,7 +120,11 @@ class App:
             self._open_video(int(opts.webcam))
 
         self.screensaver = bool(getattr(opts, "screensaver", False))
+        self.keep_awake = bool(getattr(opts, "keep_display_awake", False))
         self.ss_cycle_seconds = float(getattr(opts, "cycle_seconds", 20.0))
+        self.ss_idle_fps = max(1, int(getattr(opts, "idle_fps", 2)))
+        self._ss_full = float(getattr(opts, "full_minutes", 5.0)) * 60.0
+        self._ss_throttle = float(getattr(opts, "throttle_minutes", 5.0)) * 60.0
         self._ss_cycle_t = 0.0
         self._ss_mouse = None
         if self.screensaver:
@@ -436,10 +461,15 @@ class App:
         running = True
         selftest_frames = int(os.environ.get("ASCIIVIZ_SELFTEST", "0"))
         frame = 0
+        if self.keep_awake:
+            _set_display_awake(True)
         while running:
-            dt = self.clock.tick(self.fps) / 1000.0
+            fps = self.ss_idle_fps if (self.screensaver and self.t >= self._ss_full) else self.fps
+            dt = self.clock.tick(fps) / 1000.0
             if not self.paused:
                 self.t += dt
+            if self.screensaver and self.t >= self._ss_full + self._ss_throttle:
+                running = False  # full phase + throttle phase done -> bow out
             if self.screensaver and self.mode == "generative" \
                     and self.t - self._ss_cycle_t >= self.ss_cycle_seconds:
                 self._ss_cycle_t = self.t
@@ -478,6 +508,8 @@ class App:
             if selftest_frames and frame >= selftest_frames:
                 running = False
 
+        if self.keep_awake:
+            _set_display_awake(False)
         pygame.quit()
 
 
@@ -501,6 +533,14 @@ def build_parser():
                    help="fullscreen screensaver: hide cursor, auto-cycle patterns, exit on any input")
     p.add_argument("--cycle-seconds", type=float, default=20.0, dest="cycle_seconds",
                    help="seconds between automatic pattern changes in screensaver mode")
+    p.add_argument("--full-minutes", type=float, default=5.0, dest="full_minutes",
+                   help="screensaver: minutes of full-speed animation before throttling")
+    p.add_argument("--throttle-minutes", type=float, default=5.0, dest="throttle_minutes",
+                   help="screensaver: minutes at idle fps after that, before it exits")
+    p.add_argument("--idle-fps", type=int, default=2, dest="idle_fps",
+                   help="screensaver: frame rate during the throttle phase (keeps CPU low)")
+    p.add_argument("--keep-display-awake", action="store_true", dest="keep_display_awake",
+                   help="screensaver holds the monitor on instead of letting Windows power it off")
     p.add_argument("--fps", type=int, default=60)
     p.add_argument("--width", type=int, default=1100)
     p.add_argument("--height", type=int, default=700)

@@ -110,3 +110,30 @@ Built the first working version of the ASCII Visualizer from scratch.
 - Standing note: the sandbox's mirror of the folder stayed stale/corrupt for
   app.py and generative.py this whole session; every change was verified against
   the real files (read-back) and clean /tmp reconstructions instead.
+
+### Keep the display awake (Matthew's one regret, fixed)
+- Screensaver now calls `SetThreadExecutionState(ES_CONTINUOUS |
+  ES_DISPLAY_REQUIRED)` on start and clears it (`ES_CONTINUOUS`) on exit, via
+  ctypes — so it holds the monitor on while it's showing instead of needing the
+  user to disable Windows' "turn off display" power setting. The documented
+  kernel32 approach (what media players use), not a WM_SYSCOMMAND hook. Guarded
+  to a no-op off Windows.
+- Verified by mocking kernel32 and asserting the exact flags (0x80000002 on,
+  0x80000000 off), plus the posix no-op and a full screensaver run.
+
+### Screensaver wind-down (the behaviour Matthew actually wanted)
+- Reversed the default: the screensaver no longer holds the display awake.
+  `SetThreadExecutionState` is now opt-in via `--keep-display-awake`; by default
+  Windows powers off the display / sleeps on its own timers underneath.
+- Three-phase life: full speed for `--full-minutes` (default 5), then throttle to
+  `--idle-fps` (default 2) for `--throttle-minutes` (default 5), then the process
+  exits — so CPU/fans go quiet instead of droning all night, and the timed exit
+  hands control fully back to Windows. `screensaver.py` spells the timings out as
+  an editable args list (a .scr can't take CLI args from Windows, so rebuild to
+  change them).
+- Verified: keep_awake gating (default off / flag on), phase thresholds
+  (full→throttle→done at the right times), and an unattended run that self-exits
+  cleanly with no input and no selftest cap.
+- Open question for the morning: whether Windows relaunches the saver after it
+  self-exits while still idle (version-dependent). If it loops annoyingly, push
+  --throttle-minutes way up (effectively throttle-and-stay) or drop the exit.
