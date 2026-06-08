@@ -98,6 +98,16 @@ class App:
         elif getattr(opts, "webcam", None) is not None:
             self._open_video(int(opts.webcam))
 
+        self.screensaver = bool(getattr(opts, "screensaver", False))
+        self.ss_cycle_seconds = float(getattr(opts, "cycle_seconds", 20.0))
+        self._ss_cycle_t = 0.0
+        self._ss_mouse = None
+        if self.screensaver:
+            self.show_hud = False
+            pygame.mouse.set_visible(False)
+            if not self.fullscreen:
+                self._toggle_fullscreen()
+
     # ------------------------------------------------------------------ #
     # Setup helpers
     # ------------------------------------------------------------------ #
@@ -406,6 +416,19 @@ class App:
             self.show_hud = not self.show_hud
         return True
 
+    def _ss_should_exit(self, event):
+        """In screensaver mode, any key, click, or real mouse movement exits."""
+        if event.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
+            return True
+        if event.type == pygame.MOUSEMOTION:
+            if self._ss_mouse is None:
+                self._ss_mouse = event.pos
+                return False
+            dx = event.pos[0] - self._ss_mouse[0]
+            dy = event.pos[1] - self._ss_mouse[1]
+            return (dx * dx + dy * dy) > 25  # ignore <=5px of jitter
+        return False
+
     # ------------------------------------------------------------------ #
     # Main loop
     # ------------------------------------------------------------------ #
@@ -417,10 +440,17 @@ class App:
             dt = self.clock.tick(self.fps) / 1000.0
             if not self.paused:
                 self.t += dt
+            if self.screensaver and self.mode == "generative" \
+                    and self.t - self._ss_cycle_t >= self.ss_cycle_seconds:
+                self._ss_cycle_t = self.t
+                self.gen.next_pattern()
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
+                elif self.screensaver:
+                    if self._ss_should_exit(event):
+                        running = False
                 elif event.type == pygame.VIDEORESIZE and not self.fullscreen:
                     self.screen = pygame.display.set_mode((event.w, event.h),
                                                           pygame.RESIZABLE)
@@ -467,6 +497,10 @@ def build_parser():
                    help="cell font size in px (controls resolution)")
     p.add_argument("--density", type=float, default=0.6,
                    help="generative dot density, 0.05–1.0")
+    p.add_argument("--screensaver", action="store_true",
+                   help="fullscreen screensaver: hide cursor, auto-cycle patterns, exit on any input")
+    p.add_argument("--cycle-seconds", type=float, default=20.0, dest="cycle_seconds",
+                   help="seconds between automatic pattern changes in screensaver mode")
     p.add_argument("--fps", type=int, default=60)
     p.add_argument("--width", type=int, default=1100)
     p.add_argument("--height", type=int, default=700)

@@ -81,6 +81,24 @@ reach the end. This needs `opencv-python` (`pip install opencv-python`); without
 it the app still runs and just tells you when you try to use video. Switching to
 any other mode — or pressing `V` again — releases the camera.
 
+## Windows screensaver
+
+You can build a real Windows screensaver (`.scr`) from this project:
+
+```powershell
+pip install -r requirements.txt
+pip install pyinstaller
+powershell -ExecutionPolicy Bypass -File build_screensaver.ps1
+```
+
+(or just double-click `build_screensaver.bat`). That produces
+`ASCIIVisualizer.scr`. Right-click it in Explorer and choose **Install** to
+preview and set it, or copy it into `C:\Windows\System32` so it shows up in
+Settings → Lock screen → Screen saver. It runs fullscreen, hides the cursor,
+auto-cycles through the generative patterns, and exits on any key or real mouse
+movement. (Preview in the tiny settings monitor isn't supported — it shows
+blank there; everything else works.)
+
 ## How it works
 
 Everything is driven by a single abstraction: a **brightness field** (a 2D

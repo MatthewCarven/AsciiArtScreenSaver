@@ -16,6 +16,12 @@ captures/
 images/*
 !images/sample_rings.png
 
+# PyInstaller screensaver build artifacts
+build/
+dist/
+*.spec
+*.scr
+
 # OS cruft
 .DS_Store
 Thumbs.db

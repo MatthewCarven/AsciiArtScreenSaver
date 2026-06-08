@@ -93,3 +93,20 @@ Built the first working version of the ASCII Visualizer from scratch.
   reconstruction; all 9 app.py edits confirmed on the real file by read-back.
 - Webcam live capture itself couldn't be tested here (no camera in the sandbox) —
   Matthew to confirm the live feed.
+
+### Windows .scr screensaver
+- Added `screensaver.py` (the .scr entry point): parses `/s` (run), `/p`
+  (preview — exits blank, not supported), `/c` (config — minimal Tk messagebox),
+  and a bare launch (runs). Builds via `build_screensaver.ps1` / `.bat` using
+  PyInstaller (`--onefile --noconsole`, excludes cv2 to stay small).
+- app.py: new `--screensaver` mode (+ `--cycle-seconds`). Starts fullscreen,
+  hides the cursor, drops the HUD, auto-cycles generative patterns, and exits on
+  any key / click / >5px mouse move (the first motion event anchors, so jitter
+  doesn't instantly kill it).
+- Can't build/run a real .scr here (no Windows; PyInstaller can't cross-compile),
+  so verified all logic headlessly — parse_mode, _ss_should_exit, auto-cycle,
+  and the /s /c /p entry paths — via the /tmp reconstruction. Matthew runs the
+  one build command on Windows.
+- Standing note: the sandbox's mirror of the folder stayed stale/corrupt for
+  app.py and generative.py this whole session; every change was verified against
+  the real files (read-back) and clean /tmp reconstructions instead.
