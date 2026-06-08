@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# App output (screenshots saved with the S key)
+captures/
+
+# Images: keep the bundled sample, ignore anything else you drop in
+images/*
+!images/sample_rings.png
+
+# OS cruft
+.DS_Store
+Thumbs.db
