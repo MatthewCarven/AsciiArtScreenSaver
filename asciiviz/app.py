@@ -228,10 +228,12 @@ class App:
         if self.mode == "image":
             p = self._current_image_path()
             lines.append(f"image: {p.name if p else '(none)'}  [{self.image_index % max(len(self.images),1) + 1}/{len(self.images)}]")
+        else:
+            lines.append(f"pattern: {self.gen.pattern_name}")
         help_lines = [
-            "[Tab] mode  [1/2/3] dots/ramp/braille  [C] color  [Space] pause",
-            "[N/P] image  [ [ / ] ] resolution  [+/-] density  [F] fullscreen",
-            "[S] save png   [H] hide HUD   [Esc/Q] quit",
+            "[Tab] mode  [G] pattern  [1/2/3] dots/ramp/braille  [C] color",
+            "[Space] pause  [N/P] image  [ [ / ] ] resolution  [+/-] density",
+            "[F] fullscreen  [S] save png  [H] hide HUD  [Esc/Q] quit",
         ]
         if now < self.toast_until and self.toast_text:
             help_lines.append(f">> {self.toast_text}")
@@ -306,6 +308,9 @@ class App:
             self._set_palette("ramp")
         elif key == pygame.K_3:
             self._set_palette("braille")
+        elif key == pygame.K_g:
+            self.mode = "generative"
+            self._toast(f"pattern: {self.gen.next_pattern()}")
         elif key == pygame.K_c:
             self.color = not self.color
             self._img_key = None

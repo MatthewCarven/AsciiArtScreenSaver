@@ -1,10 +1,11 @@
 # ASCII Visualizer
 
 A pygame screensaver-style ASCII visualizer. It has two modes — a **generative
-dot-field** that drifts on its own (the soft mosaic-of-dots look from the blank
+idle mode** with five drifting patterns (dot-field, plasma, ripples, flow, and a
+twinkling starfield; the dot-field is the soft mosaic-of-dots look from the blank
 Claude window) and an **image-to-ASCII** converter — and three character
 palettes you can switch between live: **dots**, a **grayscale ramp**, and
-**braille**.
+**braille**. Press `G` to cycle the generative patterns.
 
 ![dots](images/sample_rings.png)
 
@@ -42,6 +43,7 @@ All options: `--image`, `--mode {generative,image}`, `--palette
 | -------------- | --------------------------------------------------- |
 | `Tab` / `M`    | Switch mode (generative ⇄ image)                    |
 | `1` `2` `3`    | Palette: dots / ramp / braille                      |
+| `G`            | Cycle generative pattern (dotfield → plasma → ripples → flow → starfield) |
 | `C`            | Toggle colour (tint glyphs by source / brightness)  |
 | `Space`        | Pause / resume the animation                        |
 | `N` / `P` `→` `←` | Next / previous image (drops you into image mode) |
@@ -88,8 +90,9 @@ rendered once into a cached surface.
 main.py              # entry point (also: python -m asciiviz)
 asciiviz/
   palettes.py        # the three palette definitions
+  patterns.py        # generative pattern functions (dot-field, plasma, ripples, flow, starfield)
   engine.py          # brightness-field -> glyphs; image loading
-  generative.py      # the drifting dot-field source
+  generative.py      # drives the selected pattern; density/contrast shaping
   renderer.py        # pygame fonts, cell grid, glyph blitting
   app.py             # window, input, modes, HUD, CLI
 images/              # drop images here; ships with a sample

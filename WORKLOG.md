@@ -59,3 +59,19 @@ Built the first working version of the ASCII Visualizer from scratch.
   copy of `app.py` mid-session (a sync hiccup on the tooling side). The real
   on-disk file is complete and correct (405 lines); verification was run against
   a faithfully reconstructed copy.
+
+### More generative patterns
+- Added `asciiviz/patterns.py` with five selectable idle patterns: dotfield
+  (the original), plasma, ripples, flow, and starfield. `GenerativeField` now
+  dispatches to the selected pattern and applies the shared density/contrast
+  shaping, so the +/- density control works across all of them.
+- New `G` key cycles patterns (and switches to generative mode); the HUD shows
+  the active pattern name and a `[G]` hint.
+- Bug caught in verification: starfield rendered empty because star brightness
+  and twinkle phase were derived from the same hash, so the brightest stars
+  dimmed in unison below the density threshold. Fixed by splitting selection and
+  twinkle phase into two independent integer hashes.
+- Verified: each pattern rendered to a frame and eyeballed; an integrated
+  G-cycle + run-loop smoke test passes against a reconstructed copy (the mirror
+  is still stale for app.py/generative.py, so this was run via /tmp). Real files
+  confirmed correct via read-back.
