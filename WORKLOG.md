@@ -137,3 +137,13 @@ Built the first working version of the ASCII Visualizer from scratch.
 - Open question for the morning: whether Windows relaunches the saver after it
   self-exits while still idle (version-dependent). If it loops annoyingly, push
   --throttle-minutes way up (effectively throttle-and-stay) or drop the exit.
+
+## 2026-06-11 — Checkpoint before field run
+
+- All queued backlog items are done and committed (patterns, video/webcam,
+  .scr packaging, wind-down). Project paused pending Matthew's field run.
+- Created `TODO.md` capturing the test checklist (rebuild .scr — the existing
+  binary predates the wind-down changes — webcam check, relaunch-after-exit
+  question) and the unqueued backlog (image brightness/contrast, palette
+  editor, GIF export).
+- Session being archived; next session picks up from TODO.md.
