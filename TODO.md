@@ -1,15 +1,20 @@
 # TODO
 
 ## Field run — Matthew (blocking)
-- [ ] Rebuild the .scr: the checked-in `ASCIIVisualizer.scr` / `dist\ASCIIVisualizer.exe`
-      predate the wind-down changes. Run `build_screensaver.bat`, then re-install
-      (right-click the new .scr → Install, or copy into place).
+- [ ] Delete stale git lock/temp files (sandbox can't unlink them; they'll block
+      future commits): `.git\HEAD.lock`, `.git\index.lock`, and the four
+      `.git\objects\**\tmp_obj_*` files (in `11\`, `31\`, `a1\`, `e9\`).
+      (Re-confirmed 2026-06-16: sandbox still gets "Operation not permitted".)
+- [x] Rebuild the .scr: rebuilt + installed cleanly on 2026-06-16 ("works
+      flawlessly"). Now carries the wind-down timings (5 full / 5 throttle / exit).
+- [ ] Overnight test (in progress, night of 2026-06-16): wake the PC a few times,
+      watch CPU/fan. Two things to note:
+      - Does the fan actually go quiet after the ~5-min full-speed phase?
+      - After the saver self-exits (~10 min total), does Windows relaunch it while
+        still idle? If it loops annoyingly: crank `--throttle-minutes` way up in
+        `screensaver.py`'s args list (throttle-and-stay), or drop the timed exit.
 - [ ] Webcam check: press `V` in the app — confirm the live feed renders
       (couldn't be tested in the sandbox, no camera).
-- [ ] Wind-down open question: after the saver self-exits (~10 min default:
-      5 full-speed + 5 throttled), does Windows relaunch it while still idle?
-      - If it loops annoyingly: crank `--throttle-minutes` way up in
-        `screensaver.py`'s args list (throttle-and-stay), or drop the timed exit.
 - [ ] General eyeball: patterns (`G` to cycle), palettes, HUD fade, image mode.
 
 ## Backlog — Claude (unblocked, any time)

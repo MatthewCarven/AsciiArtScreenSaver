@@ -147,3 +147,15 @@ Built the first working version of the ASCII Visualizer from scratch.
   question) and the unqueued backlog (image brightness/contrast, palette
   editor, GIF export).
 - Session being archived; next session picks up from TODO.md.
+
+## 2026-06-16 — Field run begins
+
+- Matthew rebuilt the `.scr` via `build_screensaver.bat` and installed it; reports
+  it "works flawlessly". The installed binary now carries the wind-down timings
+  (5 min full-speed → 5 min throttle @ 2fps → self-exit; display-awake off).
+- Overnight CPU/fan test now running: Matthew will wake the PC a few times through
+  the night to watch fan behaviour and check whether Windows relaunches the saver
+  after it self-exits while idle (the open question from 06-09). Results to follow.
+- Still blocked for commits: the four `tmp_obj_*` files + `HEAD.lock`/`index.lock`
+  under `.git\` — re-tried from the sandbox today, still "Operation not permitted".
+  Matthew to delete them before the next commit lands.
