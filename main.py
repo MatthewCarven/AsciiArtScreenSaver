@@ -11,7 +11,9 @@ Run from this folder:
 See the README for the full list of runtime controls.
 """
 
+import sys
+
 from asciiviz.app import main
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

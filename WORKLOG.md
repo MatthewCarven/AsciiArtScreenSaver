@@ -223,3 +223,83 @@ preview support.
 - `Claude.md` shows modified in git but the content is identical — only the line
   endings flipped to CRLF. Left alone; flagged for Matthew to commit or revert,
   and `.gitattributes` would stop it recurring.
+
+## 2026-08-01 — R1: runtime config (shipped)
+
+Matthew deleted the git litter and pushed the roadmap commit, then said carry
+on — so this session built R1, the first roadmap item.
+
+**The problem it solves.** Windows can't pass command-line arguments to a
+`.scr`, so `screensaver.py` hard-coded an args list that PyInstaller baked into
+the binary. Changing the wind-down timings meant a 36 MB rebuild plus a
+reinstall to System32. Now they come from a JSON file read at startup.
+
+**New: `asciiviz/config.py`**
+- Search order, first hit wins: `--config PATH` → `ASCIIVIZ_CONFIG` →
+  `%APPDATA%\ASCIIVisualizer\config.json` (or `~/.config/asciiviz/`) →
+  `config.json` beside the program. "Beside the program" uses `sys.executable`
+  when frozen, because `__file__` points into PyInstaller's temp unpack dir,
+  which is wiped on exit.
+- JSON, not TOML: stdlib only, no new dependency, and `tomllib` is 3.11+ while
+  this project has been run on 3.10. Keys beginning with `_` are ignored, which
+  gives JSON the comments it otherwise lacks.
+- **Nothing in the module raises.** A screensaver has no console, so an
+  exception at startup is invisible — you just get a saver that never appears.
+  Missing file, unparseable file, or one bad value all degrade to defaults, and
+  the problems are collected and surfaced as a HUD toast plus stderr.
+- `DEFAULTS` is now the single source of truth: `build_parser` reads its values,
+  so the CLI and the config file cannot drift apart. A test asserts that.
+
+**Precedence** is defaults → config file → command line, and it falls out of
+ordering rather than bookkeeping: `parser.set_defaults(**config_values)` runs
+before `parse_args`, so an explicitly-typed flag still wins. `--config` has to
+be read first with a throwaway pre-parser, since it decides what the defaults
+are.
+
+**Also landed while in there**
+- `--pattern NAME`, `--list-patterns`, `--cycle-patterns a,b,c`, `--write-config`.
+- `--no-color` / `--no-screensaver` / `--no-keep-display-awake` via
+  `argparse.BooleanOptionalAction`. Needed because with `color: true` in a
+  config there was previously no way to turn it off for a single run.
+- `cycle_patterns` restricts what the *screensaver* rotates; the `G` key still
+  cycles everything, since that setting is for unattended running, not for the
+  person at the keyboard.
+- **`throttle_minutes: -1` means "stay throttled, never self-exit"** — the knob
+  for the open field-run question about Windows relaunching the saver. Answering
+  that no longer costs a rebuild.
+- The run loop's phase logic moved into `_ss_fps()` and `_ss_finished()`, so the
+  wind-down can be tested at ten thousand seconds instead of in ten minutes.
+- The Windows `/c` Settings button used to show a stub messagebox saying there
+  was nothing to configure. It now opens the config file in Notepad (creating a
+  starter one if needed), falling back to a dialog showing the path if nothing
+  launches. It opens the file that's actually *in effect* rather than creating a
+  second one that would shadow it.
+
+**Verification.** 46 tests in a new `tests/` directory — search order, precedence
+three ways, malformed and partial JSON, unknown/reserved/comment keys, BOM
+tolerance, the frozen-executable path, `--write-config` round-tripping, the
+`.scr` entry points, wind-down phases, and pattern rotation. They run under
+pytest *or* standalone (`python tests/test_config.py`), deliberately
+fixture-free, so verifying a change never needs pytest installed. Beyond that:
+every mode/palette combination smoke-tested through the run loop, and two frames
+rendered and eyeballed — one driven by a config file, one on defaults — to
+confirm the settings visibly land and nothing regressed.
+
+**Deviation from the plan, noted per the working agreement:** the roadmap had a
+test suite parked for later. Writing one here was cheap (the config logic is
+pure and fast to test) and it caught two real bugs, so it went in early. R4 now
+has somewhere to put engine tests.
+
+**Two bugs the tests caught**
+- `ensure_exists()` created the starter config at the per-user path even when
+  `ASCIIVIZ_CONFIG` named somewhere else — so the Settings button would have
+  opened a file the saver then ignored. Now it creates where the user pointed.
+- A test that didn't sandbox `HOME` wrote a config into the container's real
+  home directory, which then silently changed a later test's result. Hence
+  `sandbox()` in `tests/_support.py`, and a standing note about it.
+
+**Behaviour with no config file present is byte-identical to before** — the
+defaults are exactly the values `screensaver.py` used to hard-code.
+
+**Hand-off:** one `.scr` rebuild to pick this up, and it should be the last one
+ever needed for a settings change.

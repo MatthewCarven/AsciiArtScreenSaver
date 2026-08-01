@@ -8,10 +8,19 @@ Windows launches a ``.scr`` with one of these command lines:
     /p <hwnd>     preview inside the Settings dialog's mini-monitor
     /c[:<hwnd>]   show the configuration dialog
 
+Settings are **not** baked in any more. Windows can't pass command-line options
+to a screensaver, so they come from ``config.json`` instead — see
+``asciiviz/config.py`` for where that file is looked for. Clicking "Settings" in
+the Windows screensaver picker (the ``/c`` command line) opens that file in an
+editor, creating a starter one first if it doesn't exist yet. So retuning the
+saver no longer needs a rebuild.
+
 Build this into ``ASCIIVisualizer.scr`` with ``build_screensaver.ps1`` (or
 ``.bat``) on Windows — see the README's "Windows screensaver" section.
 """
 
+import os
+import subprocess
 import sys
 
 
@@ -31,23 +40,50 @@ def parse_mode(argv):
     return "s", None
 
 
-def _show_config():
-    """A minimal configuration dialog (there are no options yet)."""
+def _open_in_editor(path) -> bool:
+    """Open a file in the platform's text editor. True if something launched."""
+    try:
+        if os.name == "nt":
+            # Notepad rather than the default .json handler: that handler is
+            # often a browser (which can't save it) or a heavyweight IDE. Notepad
+            # is always present and edits the file immediately.
+            try:
+                subprocess.Popen(["notepad.exe", str(path)])
+                return True
+            except OSError:
+                os.startfile(str(path))  # Windows-only fallback
+                return True
+        subprocess.Popen(["xdg-open", str(path)])
+        return True
+    except Exception:
+        return False
+
+
+def _message(text):
+    """Best-effort dialog; falls back to stdout when there's no display."""
     try:
         import tkinter as tk
         from tkinter import messagebox
         root = tk.Tk()
         root.withdraw()
-        messagebox.showinfo(
-            "ASCII Visualizer",
-            "ASCII Visualizer screensaver\n\n"
-            "It cycles through the generative patterns automatically.\n"
-            "For palettes, images, and webcam, run the app directly:\n"
-            "    python main.py",
-        )
+        messagebox.showinfo("ASCII Visualizer", text)
         root.destroy()
     except Exception:
-        pass  # no display / tkinter unavailable — nothing to configure
+        print(text)
+
+
+def _show_config():
+    """The Windows "Settings" button: open the settings file the saver actually
+    reads, creating a starter one if there isn't a config anywhere yet."""
+    from asciiviz import config
+    try:
+        path = config.ensure_exists()
+    except OSError as exc:
+        _message(f"Couldn't create a settings file:\n\n{exc}")
+        return
+    if not _open_in_editor(path):
+        _message("Edit your screensaver settings here:\n\n"
+                 f"{path}\n\nSave the file, then restart the screensaver.")
 
 
 def main(argv=None):
@@ -56,26 +92,18 @@ def main(argv=None):
 
     if mode == "c":
         _show_config()
-        return
+        return 0
     if mode == "p":
         # Rendering into the Settings mini-monitor (a parent HWND) isn't
         # supported; exit quietly so the dialog shows a blank preview.
-        return
+        return 0
 
-    # mode == "s": run the visualizer in fullscreen screensaver mode.
-    # Tweak these timings to taste, then rebuild the .scr (Windows can't pass
-    # command-line options to a screensaver itself, so they're baked in here):
-    args = [
-        "--screensaver",
-        "--full-minutes", "5",      # full-speed animation while you might watch
-        "--throttle-minutes", "5",  # then near-idle (low CPU) for a bit
-        "--idle-fps", "2",          # frame rate during the throttle phase
-        # "--keep-display-awake",   # uncomment for always-on "art mode"
-    ]
-    from asciiviz.app import build_parser, App
-    opts = build_parser().parse_args(args)
-    App(opts).run()
+    # mode == "s": run fullscreen. Everything else — timings, palette, which
+    # patterns cycle — comes from config.json, falling back to exactly the
+    # defaults this file used to hard-code.
+    from asciiviz.app import main as app_main
+    return app_main(["--screensaver"])
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

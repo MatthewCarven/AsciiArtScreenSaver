@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 import time
 from pathlib import Path
 
 import numpy as np
 import pygame
 
-from . import palettes
+from . import config, palettes
 from .engine import (
     field_to_braille,
     field_to_ramp,
@@ -85,6 +86,13 @@ class App:
         self.t = 0.0
         self.gen = GenerativeField(1, 1, self.renderer.cell_aspect, opts.density)
 
+        # Which patterns the screensaver rotates through (empty = all of them).
+        self.cycle_names = list(getattr(opts, "cycle_patterns", None) or [])
+        start_pattern = getattr(opts, "pattern", None) or (
+            self.cycle_names[0] if self.cycle_names else None)
+        if start_pattern:
+            self.gen.set_pattern(start_pattern)
+
         # Image state.
         self.images = self._scan_images()
         if not self.images:
@@ -132,6 +140,14 @@ class App:
             pygame.mouse.set_visible(False)
             if not self.fullscreen:
                 self._toggle_fullscreen()
+
+        # Where settings came from, and anything wrong with them. Surfaced in
+        # the HUD because the screensaver has no console to print to.
+        self.config_path = getattr(opts, "config_path", None)
+        problems = list(getattr(opts, "config_problems", None) or [])
+        if problems:
+            extra = f" (+{len(problems) - 1} more)" if len(problems) > 1 else ""
+            self._toast(f"config: {problems[0]}{extra}", seconds=6.0)
 
     # ------------------------------------------------------------------ #
     # Setup helpers
@@ -332,6 +348,8 @@ class App:
             "[C] color  [Space] pause  [N/P] image  [+/-] density",
             "[ [ / ] ] resolution  [F] fullscreen  [S] save  [H] HUD  [Esc/Q] quit",
         ]
+        if self.config_path:
+            help_lines.append(f"config: {self.config_path}")
         if now < self.toast_until and self.toast_text:
             help_lines.append(f">> {self.toast_text}")
 
@@ -370,6 +388,24 @@ class App:
         self.palette = name
         self._img_cache = None
         self._img_key = None
+
+    def _advance_pattern(self):
+        """Next pattern in the screensaver rotation.
+
+        Honours ``cycle_patterns`` when configured, so a big pattern library
+        doesn't dilute the rotation. The G key deliberately still cycles *all*
+        of them — the restriction is for unattended running, not for you.
+        """
+        names = self.cycle_names
+        if not names:
+            return self.gen.next_pattern()
+        try:
+            i = names.index(self.gen.pattern_name)
+        except ValueError:
+            i = -1
+        name = names[(i + 1) % len(names)]
+        self.gen.set_pattern(name)
+        return name
 
     def _change_font(self, delta):
         self.renderer.set_font_size(self.renderer.font_size + delta)
@@ -441,6 +477,24 @@ class App:
             self.show_hud = not self.show_hud
         return True
 
+    def _ss_fps(self) -> int:
+        """Frame rate for this tick: full speed, then the throttled phase."""
+        if self.screensaver and self.t >= self._ss_full:
+            return self.ss_idle_fps
+        return self.fps
+
+    def _ss_finished(self) -> bool:
+        """True once the full-speed and throttled phases are both over, so the
+        process can bow out and hand control back to Windows.
+
+        A negative ``throttle_minutes`` means "stay throttled, never exit" — the
+        escape hatch for Windows versions that just relaunch the saver while the
+        machine is still idle.
+        """
+        if not self.screensaver or self._ss_throttle < 0:
+            return False
+        return self.t >= self._ss_full + self._ss_throttle
+
     def _ss_should_exit(self, event):
         """In screensaver mode, any key, click, or real mouse movement exits."""
         if event.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
@@ -464,16 +518,15 @@ class App:
         if self.keep_awake:
             _set_display_awake(True)
         while running:
-            fps = self.ss_idle_fps if (self.screensaver and self.t >= self._ss_full) else self.fps
-            dt = self.clock.tick(fps) / 1000.0
+            dt = self.clock.tick(self._ss_fps()) / 1000.0
             if not self.paused:
                 self.t += dt
-            if self.screensaver and self.t >= self._ss_full + self._ss_throttle:
-                running = False  # full phase + throttle phase done -> bow out
+            if self._ss_finished():
+                running = False
             if self.screensaver and self.mode == "generative" \
                     and self.t - self._ss_cycle_t >= self.ss_cycle_seconds:
                 self._ss_cycle_t = self.t
-                self.gen.next_pattern()
+                self._advance_pattern()
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -514,46 +567,111 @@ class App:
 
 
 def build_parser():
+    """The CLI. Defaults come from :data:`asciiviz.config.DEFAULTS` so the
+    command line and the config file can never drift apart."""
+    D = config.DEFAULTS
+    flag = argparse.BooleanOptionalAction   # gives --color *and* --no-color
     p = argparse.ArgumentParser(
         prog="asciiviz",
         description="ASCII Visualizer — generative dot-field + image-to-ASCII screensaver.",
     )
-    p.add_argument("--image", help="path to an image to load on startup (switches to image mode)")
-    p.add_argument("--video", help="path to a video file to play as ASCII (switches to video mode)")
-    p.add_argument("--webcam", type=int, nargs="?", const=0,
+    p.add_argument("--config", metavar="PATH",
+                   help="settings file to use (otherwise the usual locations are searched)")
+    p.add_argument("--write-config", nargs="?", const="", metavar="PATH",
+                   dest="write_config",
+                   help="write current settings to a config file and exit "
+                        "(no PATH = your per-user config location)")
+    p.add_argument("--list-patterns", action="store_true", dest="list_patterns",
+                   help="print the generative pattern names and exit")
+
+    p.add_argument("--image", default=D["image"],
+                   help="path to an image to load on startup (switches to image mode)")
+    p.add_argument("--video", default=D["video"],
+                   help="path to a video file to play as ASCII (switches to video mode)")
+    p.add_argument("--webcam", type=int, nargs="?", const=0, default=D["webcam"],
                    help="capture from a webcam device index (default 0)")
-    p.add_argument("--mode", choices=("generative", "image", "video"), default="generative")
-    p.add_argument("--palette", choices=palettes.NAMES, default="dots")
-    p.add_argument("--color", action="store_true", help="tint glyphs by source/brightness colour")
-    p.add_argument("--font-size", type=int, default=16, dest="font_size",
+    p.add_argument("--mode", choices=("generative", "image", "video"), default=D["mode"])
+    p.add_argument("--palette", choices=palettes.NAMES, default=D["palette"])
+    p.add_argument("--pattern", default=D["pattern"],
+                   help="generative pattern to start on (see --list-patterns)")
+    p.add_argument("--color", action=flag, default=D["color"],
+                   help="tint glyphs by source/brightness colour")
+    p.add_argument("--font-size", type=int, default=D["font_size"], dest="font_size",
                    help="cell font size in px (controls resolution)")
-    p.add_argument("--density", type=float, default=0.6,
+    p.add_argument("--density", type=float, default=D["density"],
                    help="generative dot density, 0.05–1.0")
-    p.add_argument("--screensaver", action="store_true",
+    p.add_argument("--screensaver", action=flag, default=D["screensaver"],
                    help="fullscreen screensaver: hide cursor, auto-cycle patterns, exit on any input")
-    p.add_argument("--cycle-seconds", type=float, default=20.0, dest="cycle_seconds",
+    p.add_argument("--cycle-seconds", type=float, default=D["cycle_seconds"], dest="cycle_seconds",
                    help="seconds between automatic pattern changes in screensaver mode")
-    p.add_argument("--full-minutes", type=float, default=5.0, dest="full_minutes",
+    p.add_argument("--cycle-patterns", default=D["cycle_patterns"], dest="cycle_patterns",
+                   type=lambda s: [x.strip() for x in s.split(",") if x.strip()] or None,
+                   help="comma-separated patterns the screensaver rotates (default: all)")
+    p.add_argument("--full-minutes", type=float, default=D["full_minutes"], dest="full_minutes",
                    help="screensaver: minutes of full-speed animation before throttling")
-    p.add_argument("--throttle-minutes", type=float, default=5.0, dest="throttle_minutes",
-                   help="screensaver: minutes at idle fps after that, before it exits")
-    p.add_argument("--idle-fps", type=int, default=2, dest="idle_fps",
+    p.add_argument("--throttle-minutes", type=float, default=D["throttle_minutes"],
+                   dest="throttle_minutes",
+                   help="screensaver: minutes at idle fps after that, before it exits "
+                        "(negative = stay throttled and never exit)")
+    p.add_argument("--idle-fps", type=int, default=D["idle_fps"], dest="idle_fps",
                    help="screensaver: frame rate during the throttle phase (keeps CPU low)")
-    p.add_argument("--keep-display-awake", action="store_true", dest="keep_display_awake",
+    p.add_argument("--keep-display-awake", action=flag, default=D["keep_display_awake"],
+                   dest="keep_display_awake",
                    help="screensaver holds the monitor on instead of letting Windows power it off")
-    p.add_argument("--fps", type=int, default=60)
-    p.add_argument("--width", type=int, default=1100)
-    p.add_argument("--height", type=int, default=700)
+    p.add_argument("--fps", type=int, default=D["fps"])
+    p.add_argument("--width", type=int, default=D["width"])
+    p.add_argument("--height", type=int, default=D["height"])
     return p
 
 
+def _load_config(argv):
+    """Find and read the config file. ``--config`` has to be read before the
+    real parse, since it decides what the defaults are."""
+    pre = argparse.ArgumentParser(add_help=False)
+    pre.add_argument("--config")
+    try:
+        known, _ = pre.parse_known_args(argv)
+    except SystemExit:          # e.g. "--config" with nothing after it
+        return {}, None, ["could not read --config; using defaults"]
+    return config.load(known.config)
+
+
 def main(argv=None):
-    opts = build_parser().parse_args(argv)
+    values, cfg_path, problems = _load_config(argv)
+
+    parser = build_parser()
+    # Precedence falls out of ordering: defaults < config file < command line.
+    # set_defaults runs first, so an explicitly-passed flag still wins.
+    parser.set_defaults(**values)
+    opts = parser.parse_args(argv)
+
+    if opts.list_patterns:
+        for name in config.pattern_names():
+            print(name)
+        return 0
+
+    if opts.write_config is not None:
+        target = Path(opts.write_config) if opts.write_config else config.user_config_path()
+        current = {k: v for k, v in vars(opts).items() if k in config.SCHEMA}
+        try:
+            written = config.write_template(target, current)
+        except OSError as exc:
+            print(f"could not write {target}: {exc}", file=sys.stderr)
+            return 1
+        print(f"wrote {written}")
+        return 0
+
+    for msg in problems:
+        print(f"config: {msg}", file=sys.stderr)
+    opts.config_path = cfg_path
+    opts.config_problems = problems
+
     if opts.image:
         opts.mode = "image"
     if opts.video or opts.webcam is not None:
         opts.mode = "video"
     App(opts).run()
+    return 0
 
 
 if __name__ == "__main__":

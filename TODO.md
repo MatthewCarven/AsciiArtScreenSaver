@@ -5,7 +5,7 @@ image-to-ASCII, video/webcam, three palettes, HUD, and a working Windows `.scr`
 with wind-down. What follows is where it could go next, in the order that makes
 the most sense to build.
 
-Planned 2026-08-01. Nothing below is started.
+Planned 2026-08-01. **R1 shipped 2026-08-01**; R2–R4 not started.
 
 ---
 
@@ -16,20 +16,21 @@ Planned 2026-08-01. Nothing below is started.
       it was meant to answer:
       - Does the fan actually go quiet after the ~5-min full-speed phase?
       - After the saver self-exits (~10 min total), does Windows relaunch it
-        while still idle? If it loops annoyingly: raise `--throttle-minutes` a
-        long way in `screensaver.py`'s args list (throttle-and-stay), or drop the
-        timed exit. **R1 below makes this changeable without a rebuild** — worth
-        doing before spending another rebuild cycle on it.
+        while still idle? If it loops annoyingly, put `"throttle_minutes": -1`
+        in `config.json` — the saver then stays in the quiet phase and never
+        bows out. **No rebuild needed** now that R1 has shipped: click Settings
+        next to the screensaver in Windows, edit, save.
 - [ ] **Webcam check**: press `V` in the app — confirm the live feed renders
       (never testable in the sandbox, no camera).
 - [ ] **General eyeball**: patterns (`G` to cycle), palettes, HUD fade, image mode.
 
 ## Housekeeping — Matthew
 
-- [ ] Delete `_to_delete/` at the project root, and the four orphaned
-      `.git\objects\**\tmp_obj_*` files (in `11\`, `31\`, `a1\`, `e9\`). The
-      `tmp_obj_*` files are harmless leftovers — they do *not* block commits —
-      but they're litter.
+- [x] Git litter (`_to_delete/`, the orphaned `tmp_obj_*` objects) deleted
+      2026-08-01, and the roadmap commit pushed.
+- [ ] **Rebuild the `.scr` once more** to pick up R1 (`build_screensaver.bat`).
+      This is the last rebuild you should ever need for a settings change — from
+      then on it's the Settings button.
 - [ ] `Claude.md` shows as modified in git: the content is identical, only the
       line endings flipped to CRLF. Either commit it or `git checkout Claude.md`.
       Setting `core.autocrlf` or adding a `.gitattributes` would stop it
@@ -39,15 +40,29 @@ Planned 2026-08-01. Nothing below is started.
 
 # Roadmap
 
-Four items, ordered by dependency rather than excitement. **R1 comes first
-because it makes R2–R4 testable in the field.** Right now every screensaver
-tweak means a full PyInstaller rebuild (36 MB, several minutes, then reinstall
-to System32) — so shipping eight new patterns without a config file means eight
-rebuild cycles to audition them. Fix the feedback loop, then build the fun bits.
+Four items, ordered by dependency rather than excitement. R1 came first because
+it makes R2–R4 testable in the field: a screensaver tweak used to mean a full
+PyInstaller rebuild (36 MB, several minutes, then reinstall to System32), so
+auditioning eight new patterns would have meant eight rebuild cycles. That's
+fixed; the rest is the fun part.
 
 ---
 
-## R1 — Runtime config (no rebuild to change settings)
+## R1 — Runtime config ✅ shipped 2026-08-01
+
+`asciiviz/config.py` reads a `config.json` at startup (searched: `--config` →
+`ASCIIVIZ_CONFIG` → `%APPDATA%` → beside the program), validated key by key so a
+bad file can never stop the saver appearing. Precedence is defaults → file →
+command line, via `set_defaults` before `parse_args`. Windows' Settings button
+now opens that file in Notepad instead of showing a stub dialog. Also landed:
+`--pattern`, `--list-patterns`, `--cycle-patterns`, `--write-config`, `--no-*`
+twins for the boolean flags, and `throttle_minutes: -1` meaning "stay quiet,
+never exit". 46 tests in `tests/` cover it.
+
+<details>
+<summary>Original plan, kept for reference</summary>
+
+### R1 — Runtime config (no rebuild to change settings)
 
 **Why first.** The README literally says *"edit and rebuild to change them"*.
 A `.scr` can't take CLI arguments from Windows, so `screensaver.py` hardcodes an
@@ -92,6 +107,8 @@ with `sys.frozen` monkeypatched.
 
 **Hand-off:** one final `.scr` rebuild after this lands — then no more rebuilds
 for settings, ever.
+
+</details>
 
 ---
 
@@ -141,9 +158,10 @@ glyph-override channel that a pattern may return alongside the field. The second
 is more honest but widens the core contract — worth a conscious decision rather
 than drifting into it.
 
-**Pairs with R1:** once there are a dozen patterns, the screensaver cycling all
-of them dilutes the rotation. A config key listing which patterns cycle (and
-`--pattern` to pin one) makes a big library pleasant instead of noisy.
+**Already in place from R1:** `cycle_patterns` in the config file restricts the
+screensaver's rotation and `--pattern` pins one, so a big library won't dilute
+the rotation. New patterns just need adding to `PATTERNS` — the config validates
+names against it automatically.
 
 ---
 
@@ -220,10 +238,9 @@ shown in the HUD. It's the same "make image mode actually good" job, and it fixe
 the known braille-plus-colour dimness on dark images.
 
 **Risk: medium.** It touches the hottest path and interacts with the image
-surface cache, colour tinting, and the reveal-dissolve mask. Recommend landing a
-small pytest harness alongside it — even just the engine mapping tests — so the
-braille and ramp paths can't regress silently. Every session so far has
-re-verified by hand with throwaway scripts.
+surface cache, colour tinting, and the reveal-dissolve mask. `tests/` now exists
+(R1 started it), so add engine-mapping tests there before changing the mapper —
+the braille and ramp paths must not be able to regress silently.
 
 ---
 
@@ -241,7 +258,8 @@ don't need rediscovering.
 - **Export & headless CLI** — GIF/MP4 recording, ANSI `.txt` and HTML/SVG output,
   and a one-shot `convert` command needing no GUI. (Absorbs the old "export to
   animated GIF" backlog item.)
-- **Test suite** — a real `tests/` directory. Partly pulled forward into R4.
+- **Test suite** — started in R1 (`tests/`, 46 tests, runs with or without
+  pytest). Still missing: engine/palette/renderer coverage, which R4 wants.
 - **Screen-capture source** — desktop or a chosen region rendered live as ASCII.
 - **Image slideshow for the screensaver** — cycle `images/` with drift and
   crossfade instead of only generative patterns.
@@ -255,6 +273,9 @@ don't need rediscovering.
 
 - Repo has a GitHub remote: `MatthewCarven/AsciiArtScreenSaver`. Pushing stays
   Matthew's call. (Earlier notes saying "local only, no remote" were stale.)
+- Tests must never touch a real `~/.config` or `%APPDATA%` — use the `sandbox()`
+  helper in `tests/_support.py`. A test that skipped it wrote a config into the
+  container's home directory and then silently changed a later test's result.
 - **Git from the sandbox leaves lock files it cannot delete.** The mount forbids
   `unlink`, so every git command that touches the index leaves a stale
   `.git/index.lock` that blocks the next one. Workaround: `mv` the lock into

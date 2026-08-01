@@ -34,12 +34,15 @@ python main.py --palette braille --color
 python main.py --font-size 12 --density 0.5
 python main.py --webcam                  # live webcam as ASCII (needs opencv-python)
 python main.py --video path/to/clip.mp4  # play a video file as ASCII
+python main.py --pattern starfield       # start on a particular pattern
+python main.py --list-patterns           # see what the pattern names are
+python main.py --write-config            # save your current settings for next time
 ```
 
 All options: `--image`, `--video`, `--webcam [INDEX]`, `--mode
-{generative,image,video}`, `--palette {dots,ramp,braille}`, `--color`,
-`--font-size`, `--density`, `--fps`, `--width`, `--height`. See
-`python main.py --help`.
+{generative,image,video}`, `--palette {dots,ramp,braille}`, `--pattern NAME`,
+`--color` / `--no-color`, `--font-size`, `--density`, `--fps`, `--width`,
+`--height`, `--config PATH`. See `python main.py --help`.
 
 ## Controls
 
@@ -81,6 +84,52 @@ reach the end. This needs `opencv-python` (`pip install opencv-python`); without
 it the app still runs and just tells you when you try to use video. Switching to
 any other mode — or pressing `V` again — releases the camera.
 
+## Settings file
+
+Anything you can pass on the command line can live in a `config.json` instead,
+so you don't have to type it every time — and so the **screensaver can be
+retuned without rebuilding it**.
+
+```bash
+python main.py --write-config        # writes a starter file you can edit
+```
+
+The first of these that exists wins:
+
+1. the path given to `--config PATH`
+2. the `ASCIIVIZ_CONFIG` environment variable
+3. `%APPDATA%\ASCIIVisualizer\config.json` (Windows)
+   or `~/.config/asciiviz/config.json` (macOS/Linux)
+4. `config.json` next to the program — for the screensaver, that's the folder
+   holding `ASCIIVisualizer.scr`
+
+Keys are the long option names with dashes turned into underscores, so
+`--throttle-minutes` is `"throttle_minutes"`:
+
+```json
+{
+  "_comment": "keys starting with _ are ignored, so use them for notes",
+  "palette": "braille",
+  "pattern": "plasma",
+  "color": true,
+  "density": 0.7,
+  "cycle_patterns": ["dotfield", "plasma", "ripples"],
+  "full_minutes": 5,
+  "throttle_minutes": -1,
+  "idle_fps": 2
+}
+```
+
+Precedence is **defaults → config file → command line**, so a flag you type
+always wins for that one run. `cycle_patterns` limits which patterns the
+screensaver rotates through (omit it to cycle all of them), and a negative
+`throttle_minutes` means "stay in the quiet phase and never exit".
+
+Nothing here can stop the app starting: a missing file means defaults, an
+unparseable one means defaults, and a single bad value falls back to its default
+while the rest still apply. Problems appear briefly in the HUD, and the HUD also
+shows which file is in effect.
+
 ## Windows screensaver
 
 You can build a real Windows screensaver (`.scr`) from this project:
@@ -103,10 +152,17 @@ To stay quiet when you're away it winds down in phases: full speed for
 `--throttle-minutes` (default 5), then it exits. So CPU and fans go near-silent,
 and Windows still powers off the display / sleeps on your own timers underneath
 — set "turn off display" to whatever you like (e.g. 45 min) and it just works.
-It does **not** hold the display awake by default; pass `--keep-display-awake`
-for an always-on "art mode" instead. (The built `.scr` bakes these in from the
-args list at the top of `screensaver.py` — edit and rebuild to change them.
-Preview in the tiny settings monitor isn't supported — it shows blank there.)
+It does **not** hold the display awake by default; set `keep_display_awake` for
+an always-on "art mode" instead.
+
+**Changing these doesn't need a rebuild.** Windows can't pass command-line
+options to a screensaver, so the settings come from `config.json` (see above).
+Click **Settings** next to the screensaver in Windows and it opens that file in
+Notepad, creating it first if you haven't got one — edit, save, done. If Windows
+keeps relaunching the saver after it exits, set `"throttle_minutes": -1` so it
+stays in the quiet phase instead of bowing out.
+
+(Preview in the tiny settings monitor isn't supported — it shows blank there.)
 
 ## How it works
 
@@ -129,7 +185,9 @@ rendered once into a cached surface.
 
 ```
 main.py              # entry point (also: python -m asciiviz)
+screensaver.py       # Windows .scr entry point (/s run, /c settings, /p preview)
 asciiviz/
+  config.py          # config.json discovery, validation, defaults
   palettes.py        # the three palette definitions
   patterns.py        # generative pattern functions (dot-field, plasma, ripples, flow, starfield)
   engine.py          # brightness-field -> glyphs; image loading
@@ -139,6 +197,14 @@ asciiviz/
   app.py             # window, input, modes, HUD, CLI
 images/              # drop images here; ships with a sample
 captures/            # screenshots saved with the S key
+tests/               # run with pytest, or run a file directly with python
+```
+
+## Tests
+
+```bash
+python -m pytest tests           # if you have pytest
+python tests/test_config.py      # or just run a file — no pytest needed
 ```
 
 ## Acknowledgements & inspiration
