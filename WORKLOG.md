@@ -159,3 +159,67 @@ Built the first working version of the ASCII Visualizer from scratch.
 - Still blocked for commits: the four `tmp_obj_*` files + `HEAD.lock`/`index.lock`
   under `.git\` — re-tried from the sandbox today, still "Operation not permitted".
   Matthew to delete them before the next commit lands.
+
+## 2026-08-01 — Roadmap planning (no code changes)
+
+Matthew asked what else the project could grow into. Read the whole codebase,
+put up a menu of options, and he picked four to plan but not yet build. So this
+session is planning only — `TODO.md` was rewritten as a prioritised roadmap with
+approach notes, risks and open decisions per item, and nothing was implemented.
+
+**Chosen, in build order**
+
+1. **Runtime config** — JSON read at startup (CLI flag → env var → `%APPDATA%` →
+   beside the exe), so screensaver settings stop requiring a PyInstaller rebuild.
+2. **More generative patterns** — Doom fire, Matrix rain, Life, Mandelbrot,
+   kaleidoscope, reaction-diffusion.
+3. **Presets, colour themes & custom palettes** — absorbs the old "palette
+   editor" backlog item.
+4. **Edge-aware image mode** — DoG + Sobel directional glyphs; absorbs the old
+   image brightness/contrast backlog item.
+
+**Why that order.** Not by excitement — by dependency. R1 is unglamorous but it
+fixes the feedback loop: today every screensaver tweak costs a full 36 MB
+PyInstaller rebuild plus a reinstall, so auditioning eight new patterns without a
+config file means eight rebuild cycles. R3 reuses R1's config machinery. R4 is
+last because it's the only one that touches the hot path and the image cache, and
+it wants a test harness alongside it.
+
+**Design questions surfaced while planning** (recorded in TODO.md so they get
+decided deliberately rather than drifted into):
+- Patterns are currently pure functions of `(X, Y, t)`. Fire, Life and
+  reaction-diffusion need frame-to-frame state — proposed a backwards-compatible
+  contract where an entry may be a callable object with an optional `reset()`.
+- Stateful patterns versus the 2 fps throttle phase: a sim advancing two steps
+  per second looks broken. Either substep by `dt` or skip stateful patterns while
+  throttled.
+- Braille evaluates patterns at 4× the rows and 2× the columns. Sine patterns are
+  resolution-independent by design; cellular ones aren't.
+- Matrix rain wants specific *glyphs*, not brightness — the first real pressure
+  on the single-brightness-field abstraction. Approximate, or add an optional
+  per-cell glyph channel.
+- If the app writes presets back into the same file a human hand-edits, saving
+  reformats their work. Proposed split: `config.json` read-only to the app,
+  `presets.json` app-managed.
+
+**Parked** (raised, not scheduled, written down so they don't need
+rediscovering): audio-reactive mode, pattern crossfades and CRT/bloom post-FX,
+GIF/MP4/ANSI/HTML export plus a headless `convert` CLI, a proper test suite,
+screen-capture source, screensaver image slideshow, multi-monitor, and real `/p`
+preview support.
+
+**Corrections to stale notes**
+- The repo is no longer local-only — `origin` points at
+  `MatthewCarven/AsciiArtScreenSaver` and the last commit was pushed. Docs said
+  otherwise.
+- The git lock problem was overstated. `HEAD.lock`/`index.lock` are gone, and the
+  four `tmp_obj_*` files are orphaned temp objects that do **not** block commits.
+  What actually happens: the mount forbids `unlink`, so git leaves a stale
+  `.git/index.lock` behind after any index-touching command, which blocks the
+  *next* one. Working around it by `mv`-ing the lock into `_to_delete/` (moves are
+  permitted) and using `--no-optional-locks` for read-only checks. Commits work.
+- Left open: the overnight CPU/fan test from 2026-06-16 has no recorded result.
+  Worth noting R1 would let those timings be retuned without another rebuild.
+- `Claude.md` shows modified in git but the content is identical — only the line
+  endings flipped to CRLF. Left alone; flagged for Matthew to commit or revert,
+  and `.gitattributes` would stop it recurring.

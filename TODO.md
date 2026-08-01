@@ -1,29 +1,265 @@
-# TODO
+# TODO / Roadmap
 
-## Field run — Matthew (blocking)
-- [ ] Delete stale git lock/temp files (sandbox can't unlink them; they'll block
-      future commits): `.git\HEAD.lock`, `.git\index.lock`, and the four
-      `.git\objects\**\tmp_obj_*` files (in `11\`, `31\`, `a1\`, `e9\`).
-      (Re-confirmed 2026-06-16: sandbox still gets "Operation not permitted".)
-- [x] Rebuild the .scr: rebuilt + installed cleanly on 2026-06-16 ("works
-      flawlessly"). Now carries the wind-down timings (5 full / 5 throttle / exit).
-- [ ] Overnight test (in progress, night of 2026-06-16): wake the PC a few times,
-      watch CPU/fan. Two things to note:
+The app is feature-complete for its original brief: generative idle patterns,
+image-to-ASCII, video/webcam, three palettes, HUD, and a working Windows `.scr`
+with wind-down. What follows is where it could go next, in the order that makes
+the most sense to build.
+
+Planned 2026-08-01. Nothing below is started.
+
+---
+
+## Field run — Matthew (open)
+
+- [ ] **Overnight CPU/fan test — result never recorded.** Started the night of
+      2026-06-16; this session (08-01) has no outcome in the worklog. Two things
+      it was meant to answer:
       - Does the fan actually go quiet after the ~5-min full-speed phase?
-      - After the saver self-exits (~10 min total), does Windows relaunch it while
-        still idle? If it loops annoyingly: crank `--throttle-minutes` way up in
-        `screensaver.py`'s args list (throttle-and-stay), or drop the timed exit.
-- [ ] Webcam check: press `V` in the app — confirm the live feed renders
-      (couldn't be tested in the sandbox, no camera).
-- [ ] General eyeball: patterns (`G` to cycle), palettes, HUD fade, image mode.
+      - After the saver self-exits (~10 min total), does Windows relaunch it
+        while still idle? If it loops annoyingly: raise `--throttle-minutes` a
+        long way in `screensaver.py`'s args list (throttle-and-stay), or drop the
+        timed exit. **R1 below makes this changeable without a rebuild** — worth
+        doing before spending another rebuild cycle on it.
+- [ ] **Webcam check**: press `V` in the app — confirm the live feed renders
+      (never testable in the sandbox, no camera).
+- [ ] **General eyeball**: patterns (`G` to cycle), palettes, HUD fade, image mode.
 
-## Backlog — Claude (unblocked, any time)
-- [ ] Brightness/contrast control for image mode (braille+colour reads dim on
-      dark images).
-- [ ] Palette editor.
-- [ ] Export to animated GIF.
+## Housekeeping — Matthew
 
-## Standing notes
-- Sandbox mirror has served stale copies of `app.py`/`generative.py` before —
-  verify against real files via read-back, build test copies in /tmp.
-- Repo is local only — no remote configured; flag if pushing is ever wanted.
+- [ ] Delete `_to_delete/` at the project root, and the four orphaned
+      `.git\objects\**\tmp_obj_*` files (in `11\`, `31\`, `a1\`, `e9\`). The
+      `tmp_obj_*` files are harmless leftovers — they do *not* block commits —
+      but they're litter.
+- [ ] `Claude.md` shows as modified in git: the content is identical, only the
+      line endings flipped to CRLF. Either commit it or `git checkout Claude.md`.
+      Setting `core.autocrlf` or adding a `.gitattributes` would stop it
+      recurring.
+
+---
+
+# Roadmap
+
+Four items, ordered by dependency rather than excitement. **R1 comes first
+because it makes R2–R4 testable in the field.** Right now every screensaver
+tweak means a full PyInstaller rebuild (36 MB, several minutes, then reinstall
+to System32) — so shipping eight new patterns without a config file means eight
+rebuild cycles to audition them. Fix the feedback loop, then build the fun bits.
+
+---
+
+## R1 — Runtime config (no rebuild to change settings)
+
+**Why first.** The README literally says *"edit and rebuild to change them"*.
+A `.scr` can't take CLI arguments from Windows, so `screensaver.py` hardcodes an
+args list at build time. Every other item on this roadmap adds settings that
+someone will want to change — this is the multiplier.
+
+**Approach**
+
+- **Search order**, first hit wins, absence is fine:
+  1. `--config PATH`
+  2. `ASCIIVIZ_CONFIG` environment variable
+  3. `%APPDATA%\ASCIIVisualizer\config.json` (Windows) / `~/.config/asciiviz/config.json`
+  4. `config.json` beside the executable — `Path(sys.executable).parent` when
+     frozen by PyInstaller, project dir otherwise
+- **Format: JSON.** Stdlib only, no new dependency, PyInstaller-safe. (TOML would
+  read nicer by hand but `tomllib` is 3.11+, and the `__pycache__` shows this
+  project has been run on 3.10.)
+- **Keys mirror the argparse `dest` names exactly** — `palette`, `density`,
+  `font_size`, `color`, `cycle_seconds`, `full_minutes`, `throttle_minutes`,
+  `idle_fps`, `keep_display_awake` — so there's one vocabulary, not two.
+- **Precedence: defaults < config file < CLI flags.** Implement with
+  `parser.set_defaults(**config)` *before* `parse_args()`. Explicitly-passed
+  flags then win for free, with no "was this supplied?" bookkeeping.
+- **A broken config must never brick the screensaver.** It runs as a `.scr` with
+  no console — a traceback on startup is invisible and baffling. Unknown keys →
+  ignore with a warning; wrong types → fall back to the default; unparseable
+  file → run on defaults entirely. Surface problems as a HUD toast in windowed
+  mode and to stderr, never as an exception.
+- `--write-config` dumps current effective settings as a starter file.
+- **Upgrade the `/c` handler.** `screensaver.py` currently answers Windows'
+  "Settings" button with a stub Tk messagebox. Make it open the config file in
+  the default editor (creating it from defaults first if missing) — that's the
+  behaviour a user expects from that button.
+- Falls out cheaply while in there: `--pattern NAME` and `--list-patterns`.
+  Right now a pattern can only be reached by cycling with `G`.
+
+**Risk:** low. Nothing existing changes behaviour when no config file is present.
+
+**Verify:** precedence (default/config/CLI three-way), each search-order slot via
+a temp `APPDATA`/`HOME`, malformed and partial JSON, and a frozen-path simulation
+with `sys.frozen` monkeypatched.
+
+**Hand-off:** one final `.scr` rebuild after this lands — then no more rebuilds
+for settings, ever.
+
+---
+
+## R2 — More generative patterns
+
+Cheap, self-contained, immediately visible. `patterns.py` was written for this:
+add a function, append to `PATTERNS`, done.
+
+**One contract decision to make first.** The current signature is a *pure
+function* of `(X, Y, t, gf)` — no memory between frames. The best-looking
+candidates (fire, Life, reaction-diffusion) are iterative and need the previous
+frame. Suggested fix: let a `PATTERNS` entry be either a plain function (works
+exactly as now) or an object with `__call__(X, Y, t, gf)` plus an optional
+`reset(shape)`. Hook `reset` into `GenerativeField.set_dims` (grid changed) and
+`next_pattern` (switching in). Backwards compatible; the five existing patterns
+need no edits.
+
+**Two gotchas worth deciding up front**
+
+- **Throttle phase.** The screensaver drops to 2 fps after 5 minutes. A stateful
+  sim then advances 2 steps per second — fire stutters, Life crawls. Either step
+  the sim proportionally to `dt` (multiple substeps per frame) or mark stateful
+  patterns as "skip during throttle" and let the cycle pick a pure one.
+- **Braille sub-resolution.** Patterns are evaluated at `(rows*4, cols*2)` for
+  braille. The existing ones are resolution-independent by design (that's what
+  the physical cell-width coordinates buy). Cellular ones are not — a Life grid
+  at 8× the cells is a visibly different simulation. Simulate at cell resolution
+  and upsample, or accept that braille looks different.
+
+**Candidates, best look-per-line-of-code first**
+
+| Pattern | State? | Notes |
+| --- | --- | --- |
+| Doom fire | yes | Bottom row seeded hot, each row above cools and jitters sideways. Stunning in the `ramp` palette with warm colour. The classic. |
+| Matrix rain | light | Per-column head position + speed + fading tail — arrays, not a full sim. See the engine note below. |
+| Conway's Life | yes | Neighbour count via four `np.roll` sums. Add soft decay trails so it isn't binary-flat in a dot palette. |
+| Mandelbrot / Julia zoom | no | Pure `(X, Y, t)` — fits the existing contract perfectly. Escape-time normalised to `[0, 1]`. Reset the zoom cycle before float64 precision dies around 1e-14. |
+| Kaleidoscope | n/a | Not a pattern — a *modifier*: fold coordinates into a wedge and mirror, then call any other pattern. Argues for a small post-pattern pipeline. |
+| Reaction–diffusion (Gray-Scott) | yes | Gorgeous organic blobs, but needs many iterations per frame. This is a screensaver whose entire selling point is being quiet — simulate at low resolution and upsample, and measure the CPU cost. |
+| Metaballs, Lissajous, curl-noise warp, tunnel | no | Cheap fills, all pure functions. |
+
+**Engine note surfaced by Matrix rain:** it wants specific *glyphs* (katakana,
+digits) with a bright leading character, not just brightness. Everything today
+flows through the single brightness-field abstraction. Options: accept a
+brightness-only approximation (works, looks decent), or add an optional per-cell
+glyph-override channel that a pattern may return alongside the field. The second
+is more honest but widens the core contract — worth a conscious decision rather
+than drifting into it.
+
+**Pairs with R1:** once there are a dozen patterns, the screensaver cycling all
+of them dilutes the rotation. A config key listing which patterns cycle (and
+`--pattern` to pin one) makes a big library pleasant instead of noisy.
+
+---
+
+## R3 — Presets, colour themes & custom palettes
+
+Covers the old "palette editor" backlog item, and shares R1's config machinery —
+which is why it sits here rather than first.
+
+**Colour themes.** Colour is currently three unrelated things: a hardcoded
+two-stop gradient for generative (`_GEN_LOW` → `_GEN_HIGH`, blue-ish), source
+tint for image/video, and `renderer.bg`/fg for mono. A theme unifies them:
+a named `{bg, fg, gradient stops}`. Ship amber CRT (`#FFB000` on near-black),
+green phosphor, warm cream-on-slate, ice, mono-white, plus "source colour" for
+image/video. Multi-stop gradients via `np.interp` per channel — cleaner than the
+current two-stop lerp and no more expensive. Themes live as data in `themes.py`
+and are extendable from the config file, so a user adds one without touching code.
+
+**Presets.** A named bundle of full app state — mode, pattern, palette, theme,
+density, font size, colour, fps. `F1`–`F8` recall; a save binding writes the
+current state into a slot. HUD shows the active preset name.
+
+**Two design notes**
+
+- **Don't let the app write the hand-edited file.** If `config.json` is both
+  hand-authored and machine-rewritten, a save reformats whatever the user typed
+  (and JSON has no comments to lose, but ordering and spacing still go). Cleanest
+  split: `config.json` is read-only to the app; `presets.json` is app-managed.
+- **Theme changes must invalidate the image cache.** `_img_surface` / `_img_key`
+  hold a pre-rendered surface; forget this and the theme appears not to apply
+  until you press `N`. Same trap `_set_palette` already handles.
+
+**Custom palettes, the cheap way.** The original "palette editor" idea implied a
+UI. 90% of the value comes from a config key — `"palettes": {"blocks": " ░▒▓█"}`
+— registered into `_RAMP_STRINGS` and `NAMES` at startup. Do that first; a live
+in-app ramp editor is a stretch goal, not a prerequisite.
+
+---
+
+## R4 — Edge-aware image mode
+
+The biggest visual win available for photographs, and the biggest change to the
+hot path — hence last.
+
+**What it is.** Image mode maps brightness only, so edges dissolve into tonal
+mush. Structure-aware ASCII computes the image gradient per cell and, where the
+gradient is strong, substitutes a *directional* glyph — `-` horizontal, `|`
+vertical, `/` and `\` diagonal — falling back to the brightness ramp elsewhere.
+It's what separates ASCII art that reads as a picture from ASCII art that reads
+as a gradient.
+
+**Approach**
+
+- Blur before differentiating. A **difference-of-Gaussians** (σ≈1.0 and 1.6) on
+  the grayscale first is what makes edges read as deliberate *lines* rather than
+  per-pixel noise. Skipping this is the usual reason naive attempts look jittery.
+- Sobel for magnitude and direction; quantise direction into 4 bins (8 if the
+  font carries convincing glyphs for the extra angles).
+- **Adaptive threshold** — a percentile of gradient magnitude, not a constant —
+  so dark and bright photos both behave.
+- **No new dependencies.** Sobel and Gaussian blur are separable 1-D
+  convolutions; numpy does both fine. Do not pull in scipy for this.
+- **Keep the single abstraction intact.** Brightness field stays the core;
+  add a separate `apply_edges(grid, gray, …)` overlay step after
+  `field_to_ramp`. Don't fold edge logic into the mapper.
+- **Gate it off for braille** — braille already encodes structure at 2×4 and has
+  no directional glyphs. Make it a per-palette capability flag rather than a
+  special case buried in a branch.
+- **Video too**, same code path — but it's per-frame cost at 30 fps. Benchmark
+  before enabling by default; expose an `E` toggle and a config key.
+
+**Fold in the old brightness/contrast backlog item here.** Gamma plus black/white
+point applied to the brightness field before glyph mapping, adjustable live and
+shown in the HUD. It's the same "make image mode actually good" job, and it fixes
+the known braille-plus-colour dimness on dark images.
+
+**Risk: medium.** It touches the hottest path and interacts with the image
+surface cache, colour tinting, and the reveal-dissolve mask. Recommend landing a
+small pytest harness alongside it — even just the engine mapping tests — so the
+braille and ramp paths can't regress silently. Every session so far has
+re-verified by hand with throwaway scripts.
+
+---
+
+# Parked — considered, not scheduled
+
+Ideas raised 2026-08-01 and deliberately not taken this round. Recorded so they
+don't need rediscovering.
+
+- **Audio-reactive mode** — mic or Windows WASAPI system-audio loopback driving
+  the brightness field (spectrum bars, radial bloom, waveform). The obvious
+  missing piece for something called a *visualizer*. Would take an optional
+  dependency, the same way OpenCV is optional today.
+- **Transitions & post-FX** — crossfade between patterns instead of the current
+  hard cut every 20 s; CRT scanlines, bloom on bright glyphs, vignette.
+- **Export & headless CLI** — GIF/MP4 recording, ANSI `.txt` and HTML/SVG output,
+  and a one-shot `convert` command needing no GUI. (Absorbs the old "export to
+  animated GIF" backlog item.)
+- **Test suite** — a real `tests/` directory. Partly pulled forward into R4.
+- **Screen-capture source** — desktop or a chosen region rendered live as ASCII.
+- **Image slideshow for the screensaver** — cycle `images/` with drift and
+  crossfade instead of only generative patterns.
+- **Multi-monitor** — the `.scr` currently paints the primary display only.
+- **`.scr` preview support** — the little settings-dialog monitor shows blank;
+  proper support means parenting a window to the HWND Windows passes with `/p`.
+
+---
+
+# Standing notes
+
+- Repo has a GitHub remote: `MatthewCarven/AsciiArtScreenSaver`. Pushing stays
+  Matthew's call. (Earlier notes saying "local only, no remote" were stale.)
+- **Git from the sandbox leaves lock files it cannot delete.** The mount forbids
+  `unlink`, so every git command that touches the index leaves a stale
+  `.git/index.lock` that blocks the next one. Workaround: `mv` the lock into
+  `_to_delete/` (moves are permitted) and carry on; use
+  `git --no-optional-locks status` for read-only checks. The old worry that this
+  blocks commits outright was wrong — it's a nuisance, not a wall.
+- The sandbox mirror has served stale copies of `app.py`/`generative.py` before.
+  Verify against the real files by read-back; build test copies in `/tmp`.
