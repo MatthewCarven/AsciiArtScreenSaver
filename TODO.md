@@ -11,18 +11,88 @@ Planned 2026-08-01. **R1 shipped 2026-08-01**; R2–R4 not started.
 
 ## Field run — Matthew (open)
 
-- [ ] **Overnight CPU/fan test — result never recorded.** Started the night of
-      2026-06-16; this session (08-01) has no outcome in the worklog. Two things
-      it was meant to answer:
-      - Does the fan actually go quiet after the ~5-min full-speed phase?
-      - After the saver self-exits (~10 min total), does Windows relaunch it
-        while still idle? If it loops annoyingly, put `"throttle_minutes": -1`
-        in `config.json` — the saver then stays in the quiet phase and never
-        bows out. **No rebuild needed** now that R1 has shipped: click Settings
-        next to the screensaver in Windows, edit, save.
-- [ ] **Webcam check**: press `V` in the app — confirm the live feed renders
-      (never testable in the sandbox, no camera).
-- [ ] **General eyeball**: patterns (`G` to cycle), palettes, HUD fade, image mode.
+A run sheet for the next sit-down. Roughly in order, but each step stands alone
+— skip anything you don't fancy. Most of this has *never* run on real hardware:
+the sandbox has no camera, no Windows, and no screen, so everything below was
+verified logically rather than by looking at it.
+
+### 0. Rebuild the .scr once
+
+```
+build_screensaver.bat
+```
+
+Right-click the new `ASCIIVisualizer.scr` → **Install**. This is the last
+rebuild you should need for a settings change.
+
+### 1. The app, windowed
+
+```
+python main.py
+```
+
+- `G` cycles patterns — dotfield, plasma, ripples, flow, starfield.
+- `1` `2` `3` switch palettes. **Braille (`3`) is the one to watch**: Windows'
+  Consolas has no braille glyphs, so if DejaVu Sans Mono isn't installed you
+  should get a toast saying so rather than a screen of empty boxes. Either
+  outcome is worth recording.
+- `C` colour, `+`/`-` density, `[`/`]` resolution, `Tab` image mode, `N`/`P`
+  through `images/`, `S` saves a PNG to `captures/`.
+- HUD should fade after 15 s of no input and relight the instant you touch
+  anything.
+
+### 2. Webcam — still never tested
+
+Press `V` (or `python main.py --webcam --palette braille --color`). Needs
+`pip install opencv-python`. Without it you should get a polite toast, not a
+crash. Pressing `V` again, or switching modes, must release the camera — check
+the webcam light actually goes out.
+
+### 3. The config file — brand new, untested off-sandbox
+
+```
+python main.py --write-config
+```
+
+Writes `%APPDATA%\ASCIIVisualizer\config.json`. Edit it, rerun, and the HUD's
+bottom line should show that path. Worth trying deliberately:
+
+- A nonsense value (`"idle_fps": -5`) → a toast naming the problem, app still
+  starts on the default.
+- Broken JSON (delete a brace) → app still starts. **This is the one that
+  matters** — a screensaver that won't start gives you no error at all, just
+  nothing, so it must never die on a bad file.
+- `"cycle_patterns": ["plasma", "ripples"]` → the screensaver rotates only
+  those two, while `G` still reaches all five.
+
+Note: `%APPDATA%` is the right home for this file. "Beside the program" also
+works, but for an installed `.scr` that means `System32`, which needs admin.
+
+### 4. The Settings button
+
+In Windows' screensaver picker, select ASCII Visualizer and click **Settings**.
+It should open `config.json` in Notepad — creating it first if you skipped step
+3. Save, then preview. (The little preview monitor in that dialog stays blank;
+that's expected and not worth chasing.)
+
+### 5. The overnight question, finally answerable
+
+Still open from June: after the saver self-exits (~10 min), does Windows just
+relaunch it while you're still idle? Watch once and see. If it does loop
+annoyingly, the fix no longer needs a rebuild:
+
+```json
+{ "throttle_minutes": -1 }
+```
+
+That keeps it in the quiet 2 fps phase indefinitely instead of bowing out. Also
+still unanswered: does the fan actually go quiet when it drops to `idle_fps`
+after the first 5 minutes?
+
+### Found something odd?
+
+Jot it in `WORKLOG.md` under a dated heading — that's what the next session
+reads first. Rough notes are fine; no need to diagnose it.
 
 ## Housekeeping — Matthew
 

@@ -303,3 +303,17 @@ defaults are exactly the values `screensaver.py` used to hard-code.
 
 **Hand-off:** one `.scr` rebuild to pick this up, and it should be the last one
 ever needed for a settings change.
+
+### Session close — 2026-08-01
+
+Matthew is archiving the session and will field-test later. Expanded the field
+run section of `TODO.md` into a proper run sheet: rebuild, windowed app, webcam,
+the new config file (including deliberately breaking it, since a screensaver
+that won't start reports nothing at all), the Settings button, and the overnight
+relaunch question — which `throttle_minutes: -1` now answers without a rebuild.
+Notes on anything odd go in this file under a dated heading; that's what the
+next session reads first.
+
+State at close: everything committed (`9adeded`), one commit unpushed, working
+tree clean apart from `Claude.md`'s CRLF-only diff. Nothing lives only in the
+sandbox.
