@@ -5,7 +5,9 @@ image-to-ASCII, video/webcam, three palettes, HUD, and a working Windows `.scr`
 with wind-down. What follows is where it could go next, in the order that makes
 the most sense to build.
 
-Planned 2026-08-01. **R1 shipped 2026-08-01**; R2–R4 not started.
+Planned 2026-08-01. **R1 shipped 2026-08-01.** **R2 scoped in detail
+2026-08-05** with Matthew (all candidates chosen, slideshow unparked into it,
+build order agreed); R3–R4 not started.
 
 ---
 
@@ -182,56 +184,102 @@ for settings, ever.
 
 ---
 
-## R2 — More generative patterns
+## R2 — More generative patterns & the slideshow ⏳ scoped 2026-08-05
 
-Cheap, self-contained, immediately visible. `patterns.py` was written for this:
-add a function, append to `PATTERNS`, done.
+Planned with Matthew 2026-08-05; nothing built yet. Verdict on the candidate
+list: **all of them** — fire, rain, lava lamp, Life, tunnel, galaxy, fireflies,
+Mandelbrot zoom (5 → 13 patterns) — plus the **image slideshow, unparked** from
+the shelf and folded in here as R2c. Split into four self-contained sessions,
+each ending committed, tested, and watchable the same evening with
+`python main.py`. Kaleidoscope and reaction–diffusion were left on the shelf
+(a modifier and a CPU hog respectively — neither fits this round).
 
-**One contract decision to make first.** The current signature is a *pure
-function* of `(X, Y, t, gf)` — no memory between frames. The best-looking
-candidates (fire, Life, reaction-diffusion) are iterative and need the previous
-frame. Suggested fix: let a `PATTERNS` entry be either a plain function (works
-exactly as now) or an object with `__call__(X, Y, t, gf)` plus an optional
-`reset(shape)`. Hook `reset` into `GenerativeField.set_dims` (grid changed) and
-`next_pattern` (switching in). Backwards compatible; the five existing patterns
-need no edits.
+**Decisions locked 2026-08-05** (Matthew's calls)
 
-**Two gotchas worth deciding up front**
+- **Build order: R2a → R2b → R2c → R2d.**
+- **Mixed rotation becomes the out-of-the-box default** (`cycle_content:
+  "mixed"`): a fresh install alternates patterns and images. A deliberate
+  exception to R1's behaviour-identical principle — chosen, not drifted into;
+  one config line restores patterns-only, and an empty images folder degrades
+  to patterns-only on its own.
+- **Fire doesn't wait for R3 to be orange.** R2b includes a minimal per-pattern
+  two-stop gradient override (fire ember-orange; Life a phosphor-green
+  candidate). R3 themes absorbs and generalises it later — don't gold-plate.
+- **Rain ships brightness-only.** The per-cell glyph-override channel (katakana
+  heads etc.) is the one candidate that widens the core brightness-field
+  abstraction, so it moves to Parked as a conscious deferral, exactly as the
+  old engine note asked.
+- **Braille runs sims at full sub-resolution.** Life at 8× the cells is richer
+  soup — treated as a look, not a bug. Revisit only if the field run says
+  otherwise.
+- **Slideshow transitions stay the existing dissolve reveal.** Crossfade/drift
+  remains parked with Transitions & post-FX, so R2c never touches the
+  image-surface cache strategy.
 
-- **Throttle phase.** The screensaver drops to 2 fps after 5 minutes. A stateful
-  sim then advances 2 steps per second — fire stutters, Life crawls. Either step
-  the sim proportionally to `dt` (multiple substeps per frame) or mark stateful
-  patterns as "skip during throttle" and let the cycle pick a pure one.
-- **Braille sub-resolution.** Patterns are evaluated at `(rows*4, cols*2)` for
-  braille. The existing ones are resolution-independent by design (that's what
-  the physical cell-width coordinates buy). Cellular ones are not — a Life grid
-  at 8× the cells is a visibly different simulation. Simulate at cell resolution
-  and upsample, or accept that braille looks different.
+### R2a — five for free *(first)*
 
-**Candidates, best look-per-line-of-code first**
+Tunnel, galaxy (rotating spiral arms), fireflies (Lissajous orbits), lava lamp
+(metaballs), Matrix rain. All five fit the existing pure-function contract
+untouched. Rain statelessly: per-column integer hash → speed / phase offset /
+tail length; head position `(offset + t·speed) mod (span + tail)`; brightness
+is a distance-behind-head ramp; run two hash layers so a column can carry more
+than one drop. Pause works for free because nothing has memory. The shared
+density shaping doubles as tail-length control.
 
-| Pattern | State? | Notes |
-| --- | --- | --- |
-| Doom fire | yes | Bottom row seeded hot, each row above cools and jitters sideways. Stunning in the `ramp` palette with warm colour. The classic. |
-| Matrix rain | light | Per-column head position + speed + fading tail — arrays, not a full sim. See the engine note below. |
-| Conway's Life | yes | Neighbour count via four `np.roll` sums. Add soft decay trails so it isn't binary-flat in a dot palette. |
-| Mandelbrot / Julia zoom | no | Pure `(X, Y, t)` — fits the existing contract perfectly. Escape-time normalised to `[0, 1]`. Reset the zoom cycle before float64 precision dies around 1e-14. |
-| Kaleidoscope | n/a | Not a pattern — a *modifier*: fold coordinates into a wedge and mirror, then call any other pattern. Argues for a small post-pattern pipeline. |
-| Reaction–diffusion (Gray-Scott) | yes | Gorgeous organic blobs, but needs many iterations per frame. This is a screensaver whose entire selling point is being quiet — simulate at low resolution and upsample, and measure the CPU cost. |
-| Metaballs, Lissajous, curl-noise warp, tunnel | no | Cheap fills, all pure functions. |
+Verify: shape/range/NaN tests per pattern, headless renders at several `t`
+eyeballed in all three palettes. `cycle_patterns` / `--pattern` validation
+picks the new names up from `PATTERNS` automatically.
 
-**Engine note surfaced by Matrix rain:** it wants specific *glyphs* (katakana,
-digits) with a bright leading character, not just brightness. Everything today
-flows through the single brightness-field abstraction. Options: accept a
-brightness-only approximation (works, looks decent), or add an optional per-cell
-glyph-override channel that a pattern may return alongside the field. The second
-is more honest but widens the core contract — worth a conscious decision rather
-than drifting into it.
+### R2b — the stateful pair
 
-**Already in place from R1:** `cycle_patterns` in the config file restricts the
-screensaver's rotation and `--pattern` pins one, so a big library won't dilute
-the rotation. New patterns just need adding to `PATTERNS` — the config validates
-names against it automatically.
+Doom fire + Conway's Life with soft decay trails, plus the contract they need:
+
+- A `PATTERNS` entry may be either a plain function (unchanged) or a callable
+  object with an optional `reset()`, hooked into `GenerativeField.set_dims`
+  and pattern switching. The ten existing patterns need no edits.
+- **Substep by `dt`, capped (~6 steps/frame):** at the 2 fps throttle the sim
+  advances proportionally and just looks slower, never broken. No pattern
+  blacklisting.
+- State keyed by field shape; resize or palette switch = clean reset. Pause
+  freezes the sim because steps derive from `t`, which pause freezes.
+- The per-pattern gradient override lands here (see decisions above).
+
+Verify: reset-on-resize, substep cap, pause-freezes-sim, throttle behaviour at
+faked timestamps, plus the usual eyeballed renders. The session with the
+architecture risk carries the tests.
+
+### R2c — slideshow in the rotation
+
+- `cycle_content`: `"patterns" | "images" | "mixed"` (default `"mixed"`) — what
+  the screensaver rotates. Mixed alternates pattern → image → next pattern →
+  next image, each for `cycle_seconds`, images entering with the dissolve
+  reveal.
+- `images_dir`: point the image source at any folder; unset means the app's own
+  `images/` as today.
+- Rescan the folder each lap so newly dropped files join without a restart;
+  empty folder falls back to patterns-only — never a black screen.
+- Manual behaviour untouched: `Tab`, `N`/`P`, and `--image` work exactly as
+  they do now.
+
+Verify: rotation sequencing unit-tested at faked timestamps (advance, wrap +
+rescan, empty-folder fallback, mixed alternation), config validation for both
+new keys, run-loop smoke in all three `cycle_content` values.
+
+### R2d — the zoom *(last)*
+
+Mandelbrot/Julia endless zoom. Pure `(X, Y, t)` but the heaviest per frame:
+escape-time with early-exit masking, an iteration budget that scales with zoom
+depth, smooth (normalised) colouring, and a cycle reset before float64
+precision dies (~1e-13). Measure frame times headlessly at full-screen braille
+resolution first; if it can't hold `fps` there, it computes at cell resolution
+and upsamples for braille — measured, not guessed.
+
+### After R2
+
+One `.scr` rebuild picks up all of it — new *code* needs a rebuild, settings
+never do (R1's whole point). Fold that rebuild into the still-open field run,
+whose sheet gains: `G` through 13 patterns, mixed rotation against a folder of
+real photos, and rain/fire/Life watched at both 60 fps and the 2 fps throttle.
 
 ---
 
@@ -248,6 +296,8 @@ green phosphor, warm cream-on-slate, ice, mono-white, plus "source colour" for
 image/video. Multi-stop gradients via `np.interp` per channel — cleaner than the
 current two-stop lerp and no more expensive. Themes live as data in `themes.py`
 and are extendable from the config file, so a user adds one without touching code.
+(By the time this lands, R2b's minimal per-pattern two-stop override — fire,
+Life — already exists; themes absorb and generalise it rather than fighting it.)
 
 **Presets.** A named bundle of full app state — mode, pattern, palette, theme,
 density, font size, colour, fps. `F1`–`F8` recall; a save binding writes the
@@ -331,8 +381,16 @@ don't need rediscovering.
 - **Test suite** — started in R1 (`tests/`, 46 tests, runs with or without
   pytest). Still missing: engine/palette/renderer coverage, which R4 wants.
 - **Screen-capture source** — desktop or a chosen region rendered live as ASCII.
-- **Image slideshow for the screensaver** — cycle `images/` with drift and
-  crossfade instead of only generative patterns.
+- **Image slideshow** — *unparked 2026-08-05*, now R2c above. Only the drift +
+  crossfade half stays parked here, with Transitions & post-FX.
+- **Per-cell glyph-override channel** — a pattern returning glyph choices
+  alongside brightness (katakana rain heads, per-pattern ramps). Widens the
+  core brightness-field contract, so deferred deliberately (decision
+  2026-08-05) rather than drifted into. Revisit after R2 with fresh eyes.
+- **Kaleidoscope & reaction–diffusion** — the two R2 candidates not taken:
+  kaleidoscope is really a coordinate-fold *modifier* (argues for a small
+  post-pattern pipeline), and Gray–Scott needs many iterations per frame in a
+  screensaver whose selling point is being quiet.
 - **Multi-monitor** — the `.scr` currently paints the primary display only.
 - **`.scr` preview support** — the little settings-dialog monitor shows blank;
   proper support means parenting a window to the HWND Windows passes with `/p`.
@@ -347,10 +405,14 @@ don't need rediscovering.
   helper in `tests/_support.py`. A test that skipped it wrote a config into the
   container's home directory and then silently changed a later test's result.
 - **Git from the sandbox leaves lock files it cannot delete.** The mount forbids
-  `unlink`, so every git command that touches the index leaves a stale
-  `.git/index.lock` that blocks the next one. Workaround: `mv` the lock into
-  `_to_delete/` (moves are permitted) and carry on; use
-  `git --no-optional-locks status` for read-only checks. The old worry that this
-  blocks commits outright was wrong — it's a nuisance, not a wall.
+  `unlink`, so index/ref-touching commands leave stale `.lock` files that block
+  the next one. Workaround, refined: park them *inside the mount* —
+  `mkdir -p .git/stale-locks` and `mv .git/*.lock` there before and after each
+  git command. Inside `.git` so they never show as untracked, and never parked
+  outside the mount (a cross-filesystem move is copy-then-unlink, and the
+  unlink is exactly what's forbidden — those failures hide easily). Use
+  `git --no-optional-locks status` for read-only checks. The parked files are
+  Matthew's to delete whenever. `tmp_obj_*` orphans under `.git/objects/` are
+  harmless and don't block anything.
 - The sandbox mirror has served stale copies of `app.py`/`generative.py` before.
   Verify against the real files by read-back; build test copies in `/tmp`.

@@ -317,3 +317,50 @@ next session reads first.
 State at close: everything committed (`9adeded`), one commit unpushed, working
 tree clean apart from `Claude.md`'s CRLF-only diff. Nothing lives only in the
 sandbox.
+
+## 2026-08-05 — R2 scoped with Matthew (planning only, no code)
+
+Matthew came back asking for more patterns and whether images from a source
+folder could drive the screensaver — then, offered the R2 candidates as a menu,
+picked *all of them* and asked to "just plan the future with me for now". So,
+like 2026-08-01: a planning session. Nothing was built; `TODO.md` now carries
+the full plan and this entry records the choices.
+
+**Decisions (Matthew's, via the question widget; detail in TODO.md)**
+
+- **R2 scope: every candidate group** — Doom fire, Matrix rain, lava lamp,
+  Life-with-trails, tunnel, galaxy, fireflies, Mandelbrot zoom. 5 → 13
+  patterns. Kaleidoscope and reaction–diffusion stay shelved.
+- **The image slideshow is unparked** into R2 as R2c: `cycle_content`
+  (patterns/images/mixed) plus `images_dir`, folder rescanned each lap,
+  dissolve reveal on entry, empty folder degrading to patterns-only.
+- **Build order: R2a → R2b → R2c → R2d** — five pure patterns first (no
+  architecture risk, rotation doubles in one session), then the stateful pair
+  with the contract change, then the slideshow, then the zoom. Each a
+  self-contained session, committed and windowed-watchable the same evening.
+- **Mixed rotation becomes the default.** A deliberate exception to R1's
+  behaviour-identical principle — recorded as chosen, not drifted into.
+- **Fire gets colour on day one:** R2b carries a minimal per-pattern two-stop
+  gradient override (ember fire, phosphor Life); R3 themes absorbs it later.
+- **Rain ships brightness-only.** The glyph-override channel goes to Parked as
+  a conscious deferral — it's the one idea that widens the core
+  brightness-field abstraction, and the old R2 engine note asked for exactly
+  this decision to be made deliberately.
+- **Braille sims run at full sub-resolution** (Life at 8× the cells = richer
+  soup) — a look, not a bug, pending field evidence.
+- Stateful contract as proposed on 2026-08-01: `PATTERNS` entries may be
+  callable objects with `reset()`; substep by `dt` with a cap so the 2 fps
+  throttle slows sims instead of breaking them.
+
+**Also**
+
+- Standing note refreshed: git lock parking now goes to `.git/stale-locks/`
+  (in-mount rename; never park outside the mount — that move needs the
+  forbidden `unlink` and its failure hides easily). Replaces the `_to_delete/`
+  advice.
+- Rebuild economics made explicit in TODO: new *code* needs one `.scr` rebuild
+  at the end of R2; settings never do. Folds into the still-open field run,
+  which gains the new patterns and mixed rotation as checklist items.
+
+State at close: docs-only commit, tree otherwise untouched, nothing lives only
+in the sandbox. Next session starts at R2a.
