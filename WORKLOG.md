@@ -364,3 +364,36 @@ the full plan and this entry records the choices.
 
 State at close: docs-only commit, tree otherwise untouched, nothing lives only
 in the sandbox. Next session starts at R2a.
+
+## 2026-08-10 — Electric ! found and identified (docs only)
+
+Matthew asked how dotfield's data is calculated (answer: no particles — six
+interfering waves, two of them ripples from invisible orbiting sources, then
+density-crush and the dot ramp), which surfaced a memory of an old particle
+screensaver. He named the file — `electric.scr` — then produced the real thing
+from storage into `electric/`: *Electric !* v1.3.1, JX Bardant, French
+freeware, 1997, GeoCities home page, readmes in seven languages.
+
+Static analysis (readme + `strings` on the PE) settled how it worked, and
+Matthew's recall that "it uses the windows palette heavily" was the exact
+mechanism, not just a detail:
+
+- Settings dialog text: "Patterns represent the electric field of particles
+  laid on the screen. Choose here their type and number." Particle types are
+  all French *-ons*: Electrons, Melons, Dindons, Cochons, Jambons, Cornichons,
+  Oignons. "All of them !" is an option.
+- Imports `CreatePalette` / `RealizePalette` / `AnimatePalette`: the field is
+  computed once per pixel into a 256-colour indexed image ("computing
+  intensive" on a 486, per the readme), then animated by rotating the hardware
+  palette — motion with zero recomputation, plus a "new image after N seconds"
+  re-seed. Hence the readme's warning that True Color shows only static
+  images: no palette, no animation. It's a 32-bit PE, so it would still *run*
+  on modern Windows — but only as a still life. An ASCII homage is the
+  realistic way to see it move again.
+
+Actions: `electric/` added to `.gitignore` (the `*.scr` rule already covered
+the binary; this keeps the readmes out of status too), and the homage pattern
+parked in TODO with a sketch — pure-contract, the glyph ramp playing the role
+of the rotating palette. Promotion into the build queue is Matthew's call.
+Also noticed in passing: a fresh `ASCIIVisualizer.scr` built 2026-08-10 — the
+R1 rebuild has happened; field-run results still to be jotted here.

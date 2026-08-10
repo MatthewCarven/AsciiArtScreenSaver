@@ -22,6 +22,9 @@ dist/
 *.spec
 *.scr
 
+# The 1997 "Electric !" screensaver (JX Bardant) — reference shrine, not ours to track
+electric/
+
 # OS cruft
 .DS_Store
 Thumbs.db

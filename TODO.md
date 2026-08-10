@@ -387,6 +387,21 @@ don't need rediscovering.
   alongside brightness (katakana rain heads, per-pattern ramps). Widens the
   core brightness-field contract, so deferred deliberately (decision
   2026-08-05) rather than drifted into. Revisit after R2 with fresh eyes.
+- **`electric` — homage to *Electric !* (JX Bardant, 1997).** The screensaver
+  Matthew half-remembered turned out to be real; binary and readme now sit in
+  `electric/` (git-ignored). Its mechanism, confirmed from the readme plus the
+  binary's own strings: charges scattered on screen ("patterns represent the
+  electric field of particles laid on the screen" — types include Electrons,
+  Melons, Dindons, Cochons, Jambons, Cornichons, Oignons), the field computed
+  once per pixel into a 256-colour indexed image, then animated *purely* by
+  `AnimatePalette` hardware palette rotation — endless flow at zero recompute,
+  which is why it only animated in 256-colour mode and sits static on modern
+  Windows. ASCII translation fits the pure contract: potential field from
+  hash-placed (or slow-wandering) charges, brightness `frac(field·bands −
+  t·speed)` — the glyph ramp becomes the rotating palette — with a periodic
+  charge re-seed echoing its "new image after N seconds". Promote into the
+  rotation whenever Matthew fancies; it may be the only way to watch it move
+  again.
 - **Kaleidoscope & reaction–diffusion** — the two R2 candidates not taken:
   kaleidoscope is really a coordinate-fold *modifier* (argues for a small
   post-pattern pipeline), and Gray–Scott needs many iterations per frame in a
