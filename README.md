@@ -1,11 +1,14 @@
 # ASCII Visualizer
 
 A pygame screensaver-style ASCII visualizer. It has two modes — a **generative
-idle mode** with five drifting patterns (dot-field, plasma, ripples, flow, and a
-twinkling starfield; the dot-field is the soft mosaic-of-dots look from the blank
-Claude window) and an **image-to-ASCII** converter — and three character
-palettes you can switch between live: **dots**, a **grayscale ramp**, and
-**braille**. Press `G` to cycle the generative patterns.
+idle mode** with eleven drifting patterns (dot-field, plasma, ripples, flow,
+starfield, Matrix rain, a lava lamp, a depth tunnel, a spiral galaxy, drifting
+fireflies, and `electric` — an homage to JX Bardant's 1997 *Electric !*
+screensaver, its rotating-palette contour bands reborn in glyphs; the dot-field
+is the soft mosaic-of-dots look from the blank Claude window) and an
+**image-to-ASCII** converter — and three character palettes you can switch
+between live: **dots**, a **grayscale ramp**, and **braille**. Press `G` to
+cycle the generative patterns.
 
 ![dots](images/sample_rings.png)
 
@@ -34,7 +37,7 @@ python main.py --palette braille --color
 python main.py --font-size 12 --density 0.5
 python main.py --webcam                  # live webcam as ASCII (needs opencv-python)
 python main.py --video path/to/clip.mp4  # play a video file as ASCII
-python main.py --pattern starfield       # start on a particular pattern
+python main.py --pattern electric        # start on a particular pattern
 python main.py --list-patterns           # see what the pattern names are
 python main.py --write-config            # save your current settings for next time
 ```
@@ -50,7 +53,7 @@ All options: `--image`, `--video`, `--webcam [INDEX]`, `--mode
 | -------------- | --------------------------------------------------- |
 | `Tab` / `M`    | Switch mode (generative ⇄ image)                    |
 | `1` `2` `3`    | Palette: dots / ramp / braille                      |
-| `G`            | Cycle generative pattern (dotfield → plasma → ripples → flow → starfield) |
+| `G`            | Cycle the 11 generative patterns (see `--list-patterns`)  |
 | `V`            | Start / stop live webcam (video mode)               |
 | `C`            | Toggle colour (tint glyphs by source / brightness)  |
 | `Space`        | Pause / resume the animation                        |
@@ -189,7 +192,7 @@ screensaver.py       # Windows .scr entry point (/s run, /c settings, /p preview
 asciiviz/
   config.py          # config.json discovery, validation, defaults
   palettes.py        # the three palette definitions
-  patterns.py        # generative pattern functions (dot-field, plasma, ripples, flow, starfield)
+  patterns.py        # the 11 generative pattern functions (all pure functions of x, y, t)
   engine.py          # brightness-field -> glyphs; image loading
   generative.py      # drives the selected pattern; density/contrast shaping
   video.py           # webcam / video-file capture via OpenCV

@@ -7,7 +7,8 @@ the most sense to build.
 
 Planned 2026-08-01. **R1 shipped 2026-08-01.** **R2 scoped in detail
 2026-08-05** with Matthew (all candidates chosen, slideshow unparked into it,
-build order agreed); R3–R4 not started.
+build order agreed). **R2a shipped 2026-08-11** — 11 patterns now.
+R2b–R2d and R3–R4 not started.
 
 ---
 
@@ -33,7 +34,11 @@ rebuild you should need for a settings change.
 python main.py
 ```
 
-- `G` cycles patterns — dotfield, plasma, ripples, flow, starfield.
+- `G` cycles patterns — now all 11: the original five plus rain, lava, tunnel,
+  galaxy, fireflies, electric (R2a, 2026-08-11). Worth a slow lap in each
+  palette: electric's flowing bands and the tunnel are the showpieces, braille
+  makes both spectacular, and fireflies is deliberately the calm one. This is
+  windowed `python main.py` — no rebuild needed to see any of it.
 - `1` `2` `3` switch palettes. **Braille (`3`) is the one to watch**: Windows'
   Consolas has no braille glyphs, so if DejaVu Sans Mono isn't installed you
   should get a toast saying so rather than a screen of empty boxes. Either
@@ -217,12 +222,15 @@ each ending committed, tested, and watchable the same evening with
   remains parked with Transitions & post-FX, so R2c never touches the
   image-surface cache strategy.
 
-### R2a — six for free *(first)*
+### R2a — six for free *(first)* ✅ shipped 2026-08-11
 
 Tunnel, galaxy (rotating spiral arms), fireflies (Lissajous orbits), lava lamp
 (metaballs), Matrix rain, and `electric` — the *Electric !* homage, promoted
 from Parked 2026-08-10 on Matthew's say-so. All six fit the existing
-pure-function contract untouched. Rain statelessly: per-column integer hash →
+pure-function contract untouched — `patterns.py` was the only app file that
+changed. Tuning notes and the two performance rewrites (windowed fireflies,
+column-vectorised rain) are in WORKLOG 2026-08-11; `tests/test_patterns.py`
+now pins the contract (56 tests total). Rain statelessly: per-column integer hash →
 speed / phase offset / tail length; head position `(offset + t·speed) mod
 (span + tail)`; brightness is a distance-behind-head ramp; run two hash layers
 so a column can carry more than one drop. Electric: potential field from

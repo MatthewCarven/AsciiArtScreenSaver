@@ -402,3 +402,59 @@ R1 rebuild has happened; field-run results still to be jotted here.
 R2a, which becomes "six for free" (R2 now lands 5 → 14 patterns). TODO
 updated; the parked entry is now a stub pointing here. Still planning-only:
 R2a's build starts when Matthew says go.
+
+## 2026-08-11 — R2a shipped: six for free (5 → 11 patterns)
+
+Matthew said go over morning coffee, so R2a got built: rain, lava, tunnel,
+galaxy, fireflies and electric, all pure functions of `(X, Y, t, gf)` appended
+to `patterns.py` — which was the *only* app file that changed. Everything else
+(G key, HUD, `--pattern`, `--list-patterns`, `cycle_patterns` validation, the
+screensaver rotation) picked the new names up automatically from `PATTERNS`,
+exactly as R1 promised. A new `_hash01` helper packages starfield's integer-
+hash trick so stateless patterns can give columns/blobs/charges persistent
+personalities without storing anything.
+
+**Tuning story** (every pattern eyeballed via headless contact sheets at
+1920×1080, dots palette, three timestamps; then re-tuned against numbers):
+
+- The density crush (values below `1 - density` go black) is the recurring
+  antagonist for sparse patterns. Rain's tails and fireflies' glows died at
+  first render; both now pre-lift their brightness so the fade bottoms out at
+  the crush threshold instead of vanishing halfway. Constants are tuned for
+  the default `density 0.6` and still thin correctly at other settings.
+- Rain: heads carry a hot glint, two hash layers give columns multiple drops,
+  and a coarse time-quantised per-cell hash adds glyph-shimmer. Reads as a
+  proper downpour now.
+- Lava went from solid white slabs to a *rim-lit shell* look — `4m(1-m)`
+  peaks brightness at the blob boundary, interiors glow dimmer — which reads
+  beautifully in dots and braille both.
+- Tunnel was rebuilt twice: spokes+rings read as moiré petals, and the first
+  ring version could never reach a bright glyph — the fog ceiling capped raw
+  values at 0.83, which the shaping gamma turned into 0.65 max (found by
+  printing shaped-field stats, not by squinting). Final: tanh-sharpened rings,
+  slight angular wobble, fog floor raised so near rings hit full glow while
+  the throat stays dim. 20% of cells land in the bright glyphs now.
+- Galaxy: log-spiral arms (`theta*3 - log(r)*4.6`), envelope and gain raised
+  until the pinwheel fills the frame with dusty arm tails.
+- Electric came out right on the first render — bands 2.6 per potential unit,
+  flow 0.55/s, `tanh(|V|)` far-field damping — and looks eerily like the
+  original's nested contour blobs, shimmering cores included.
+
+**Performance** (measured, field compute per frame at 192×56 / braille ×8):
+fireflies started at 83 ms in braille — forty full-grid gaussians — and is
+2.6 ms after windowing each fly to its own ±8 cell-width patch of the grid.
+Rain halved to 4.9 ms by hashing one row and broadcasting against Y. Heaviest
+pattern is now lava at ~8 ms braille *on the sandbox CPU*; all are 60 fps
+territory on real hardware, but the fps counter on the HUD will say for sure.
+
+**Verification:** new `tests/test_patterns.py` (10 tests: shape/range/finite
+at cell, braille and 1×1 grids; determinism in `t`; density thinning; config
+accepting the six names and still rejecting nonsense — "melons", in memoriam).
+Full suite 56/56. Run-loop smoke for each new pattern through real `main.py`
+headlessly, plus braille and screensaver auto-cycle paths. Braille contact
+sheet eyeballed — tunnel and electric are spectacular there.
+
+**Not tested here** (sandbox has no screen — Matthew's half): how they feel in
+motion, colour-on appearance (still the global blue gradient until R2b's warm
+hook), and real fps on his hardware. Run sheet updated in TODO's field-run
+section. No `.scr` rebuild yet — that still waits for the end of R2.
