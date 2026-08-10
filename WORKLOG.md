@@ -397,3 +397,8 @@ parked in TODO with a sketch — pure-contract, the glyph ramp playing the role
 of the rotating palette. Promotion into the build queue is Matthew's call.
 Also noticed in passing: a fresh `ASCIIVisualizer.scr` built 2026-08-10 — the
 R1 rebuild has happened; field-run results still to be jotted here.
+
+**Addendum, same evening:** Matthew said yes — `electric` is promoted into
+R2a, which becomes "six for free" (R2 now lands 5 → 14 patterns). TODO
+updated; the parked entry is now a stub pointing here. Still planning-only:
+R2a's build starts when Matthew says go.

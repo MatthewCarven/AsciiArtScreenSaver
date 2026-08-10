@@ -188,7 +188,8 @@ for settings, ever.
 
 Planned with Matthew 2026-08-05; nothing built yet. Verdict on the candidate
 list: **all of them** — fire, rain, lava lamp, Life, tunnel, galaxy, fireflies,
-Mandelbrot zoom (5 → 13 patterns) — plus the **image slideshow, unparked** from
+Mandelbrot zoom, and (promoted 2026-08-10) the *Electric !* homage
+(5 → 14 patterns) — plus the **image slideshow, unparked** from
 the shelf and folded in here as R2c. Split into four self-contained sessions,
 each ending committed, tested, and watchable the same evening with
 `python main.py`. Kaleidoscope and reaction–diffusion were left on the shelf
@@ -216,15 +217,21 @@ each ending committed, tested, and watchable the same evening with
   remains parked with Transitions & post-FX, so R2c never touches the
   image-surface cache strategy.
 
-### R2a — five for free *(first)*
+### R2a — six for free *(first)*
 
 Tunnel, galaxy (rotating spiral arms), fireflies (Lissajous orbits), lava lamp
-(metaballs), Matrix rain. All five fit the existing pure-function contract
-untouched. Rain statelessly: per-column integer hash → speed / phase offset /
-tail length; head position `(offset + t·speed) mod (span + tail)`; brightness
-is a distance-behind-head ramp; run two hash layers so a column can carry more
-than one drop. Pause works for free because nothing has memory. The shared
-density shaping doubles as tail-length control.
+(metaballs), Matrix rain, and `electric` — the *Electric !* homage, promoted
+from Parked 2026-08-10 on Matthew's say-so. All six fit the existing
+pure-function contract untouched. Rain statelessly: per-column integer hash →
+speed / phase offset / tail length; head position `(offset + t·speed) mod
+(span + tail)`; brightness is a distance-behind-head ramp; run two hash layers
+so a column can carry more than one drop. Electric: potential field from
+hash-placed, slowly wandering charges; brightness `frac(field·bands −
+t·speed)`, so the glyph ramp plays the 1997 hardware palette and the contour
+bands flow forever — `AnimatePalette` reborn — with a periodic charge re-seed
+echoing the original's "new image after N seconds". Pause works for free
+because nothing has memory. The shared density shaping doubles as tail-length
+control on rain and band-width control on electric.
 
 Verify: shape/range/NaN tests per pattern, headless renders at several `t`
 eyeballed in all three palettes. `cycle_patterns` / `--pattern` validation
@@ -236,7 +243,7 @@ Doom fire + Conway's Life with soft decay trails, plus the contract they need:
 
 - A `PATTERNS` entry may be either a plain function (unchanged) or a callable
   object with an optional `reset()`, hooked into `GenerativeField.set_dims`
-  and pattern switching. The ten existing patterns need no edits.
+  and pattern switching. The eleven existing patterns need no edits.
 - **Substep by `dt`, capped (~6 steps/frame):** at the 2 fps throttle the sim
   advances proportionally and just looks slower, never broken. No pattern
   blacklisting.
@@ -278,7 +285,7 @@ and upsamples for braille — measured, not guessed.
 
 One `.scr` rebuild picks up all of it — new *code* needs a rebuild, settings
 never do (R1's whole point). Fold that rebuild into the still-open field run,
-whose sheet gains: `G` through 13 patterns, mixed rotation against a folder of
+whose sheet gains: `G` through 14 patterns, mixed rotation against a folder of
 real photos, and rain/fire/Life watched at both 60 fps and the 2 fps throttle.
 
 ---
@@ -387,21 +394,10 @@ don't need rediscovering.
   alongside brightness (katakana rain heads, per-pattern ramps). Widens the
   core brightness-field contract, so deferred deliberately (decision
   2026-08-05) rather than drifted into. Revisit after R2 with fresh eyes.
-- **`electric` — homage to *Electric !* (JX Bardant, 1997).** The screensaver
-  Matthew half-remembered turned out to be real; binary and readme now sit in
-  `electric/` (git-ignored). Its mechanism, confirmed from the readme plus the
-  binary's own strings: charges scattered on screen ("patterns represent the
-  electric field of particles laid on the screen" — types include Electrons,
-  Melons, Dindons, Cochons, Jambons, Cornichons, Oignons), the field computed
-  once per pixel into a 256-colour indexed image, then animated *purely* by
-  `AnimatePalette` hardware palette rotation — endless flow at zero recompute,
-  which is why it only animated in 256-colour mode and sits static on modern
-  Windows. ASCII translation fits the pure contract: potential field from
-  hash-placed (or slow-wandering) charges, brightness `frac(field·bands −
-  t·speed)` — the glyph ramp becomes the rotating palette — with a periodic
-  charge re-seed echoing its "new image after N seconds". Promote into the
-  rotation whenever Matthew fancies; it may be the only way to watch it move
-  again.
+- **`electric` homage** — *promoted 2026-08-10 into R2a* on Matthew's say-so;
+  the sketch lives there now. Background (what *Electric !* was and how its
+  `AnimatePalette` trick worked) is in WORKLOG 2026-08-10; the original sits
+  in `electric/`, git-ignored.
 - **Kaleidoscope & reaction–diffusion** — the two R2 candidates not taken:
   kaleidoscope is really a coordinate-fold *modifier* (argues for a small
   post-pattern pipeline), and Gray–Scott needs many iterations per frame in a
