@@ -60,16 +60,21 @@ DEFAULTS = {
     "width": 1100,
     "height": 700,
     "image": None,
+    "images_dir": None,         # None -> the app's own images/ folder
     "video": None,
     "webcam": None,
     "screensaver": False,
     "cycle_seconds": 20.0,
+    "cycle_content": "mixed",   # what the screensaver rotates
     "cycle_patterns": None,     # None -> cycle all of them
     "full_minutes": 5.0,
     "throttle_minutes": 5.0,    # negative -> stay throttled, never self-exit
     "idle_fps": 2,
     "keep_display_awake": False,
 }
+
+#: What the screensaver can rotate. "mixed" alternates a pattern and an image.
+CYCLE_CONTENT = ("patterns", "images", "mixed")
 
 #: Accepted silently and ignored for now — reserved for the presets/themes
 #: phase, so people can write them early without being told they're unknown.
@@ -250,10 +255,14 @@ SCHEMA = {
     "width": _integer(160, 16384),
     "height": _integer(120, 16384),
     "image": _nullable(_text),
+    # Not checked against the disk here: a folder that's missing when the saver
+    # starts just means no images until it appears (the app rescans each lap).
+    "images_dir": _nullable(_text),
     "video": _nullable(_text),
     "webcam": _nullable(_integer(0, 64)),
     "screensaver": _boolean,
     "cycle_seconds": _number(1.0, 86400.0),
+    "cycle_content": _one_of(lambda: CYCLE_CONTENT),
     "cycle_patterns": _nullable(_text_list(pattern_names)),
     "full_minutes": _number(0.0, 10080.0),
     # No lower bound on purpose: a negative value means "stay in the throttled
@@ -322,8 +331,13 @@ _HELP = [
     "Command-line flags override this file; this file overrides the defaults.",
     "throttle_minutes: minutes at idle_fps after full_minutes, then the saver",
     "  exits. Use a negative number to stay throttled and never exit.",
+    'cycle_content: what the screensaver rotates: "patterns", "images", or',
+    '  "mixed" (a pattern, then an image, and so on). An empty images folder',
+    "  means patterns only.",
     "cycle_patterns: which patterns the screensaver rotates, e.g.",
     '  ["dotfield", "plasma"]. Omit or null to cycle all of them.',
+    "images_dir: a folder of your own pictures, as a full path, e.g.",
+    '  "C:/Users/you/Pictures/Saver". Omit or null for the app\'s images/.',
     "Any key starting with _ is ignored, so use them for your own notes.",
 ]
 

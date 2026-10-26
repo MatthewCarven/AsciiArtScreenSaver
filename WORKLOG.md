@@ -731,6 +731,121 @@ describes the check. No `.exe`/`.scr` rebuild: the builds keep the old check,
 and draw boxes here, until the end-of-R2 rebuild. TODO's run sheet says so.
 Nothing pushed.
 
+## 2026-10-26 — R2c shipped: the slideshow joins the screensaver's rotation
+
+A side session, run alongside R2d (the zoom, in its own worktree), to the R2c
+spec in TODO and the 2026-08-05 decisions. Nothing in `patterns.py`, which is
+R2d's.
+
+**What it does.** Two new settings, each also a flag:
+
+- `cycle_content`: `"patterns"`, `"images"` or `"mixed"`, default `"mixed"`.
+  It decides what the screensaver rotates, each item held for
+  `cycle_seconds`. Mixed goes pattern → image → next pattern → next image.
+  Images enter with the existing dissolve. Making mixed the default is
+  Matthew's deliberate change from 2026-08-05.
+- `images_dir`: any folder, read-only. Unset, it's the app's own `images/`
+  exactly as before, including `config.data_dir()`'s frozen fallback and the
+  sample image. A named folder is never created and never gets the sample.
+  `~` and `%VAR%` are expanded, since a `.scr` runs from an unknown current
+  folder and a full path is the only safe kind.
+
+**How** (`app.py`, about 120 lines). The run loop's inline cycle check became
+`App._ss_cycle()`, which is also what the tests drive at faked timestamps. It
+picks an image (`_ss_next_image`) when mixed is on a pattern, or always in
+"images". When there's none to show, the slot goes to the next pattern
+(`_ss_next_pattern`), so "images" and "mixed" both fall back to patterns. The
+slideshow keeps its own place in `self.images` (`_ss_image_pos`) and rescans
+the folder when a lap ends, or every slot while the list is empty. So a file
+dropped in mid-lap joins the next lap, and a folder that starts empty starts
+showing pictures one slot after the first one lands. `--image` stays at the
+front of the list across rescans, as it is at startup. The manual keys don't
+touch any of this: `Tab`, `N`/`P`, `G` and `--image` are unchanged, and
+nothing rotates outside `--screensaver`.
+
+**The sims.** Mixed returning from an image to a *different* sim already went
+through `GenerativeField`'s switch-to reset. A one-pattern rotation (say
+`cycle_patterns: ["life"]`) came back to the same index, which by R2b's rule
+doesn't reset. So `GenerativeField.restart()` (three lines) is called when the
+rotation comes back from an image to the same pattern. A sim then always
+starts afresh after an image, and "patterns" with one sim still leaves it
+running, as R2b decided. Both are tested.
+
+**Beyond the spec, all in service of "never a black screen":**
+
+- **An image that won't load is skipped, not fatal.** Before this, a corrupt
+  file in `images/` raised out of `load_image_fields` and took the app down on
+  `N`. With rescans picking up files mid-copy, that would have killed the
+  screensaver. `_ensure_image_loaded` now catches the failure, remembers it
+  (so a broken picture isn't re-decoded every frame), and draws the pattern.
+  The rotation tries the next file in the lap, and clears the memo a lap later
+  so a finished copy gets its turn. Strictly this changes manual behaviour,
+  but only from a crash to a toast.
+- `_scan_images` treats an `OSError` (a share or USB drive gone away) as an
+  empty folder.
+- A lone image in an "images" slideshow is held rather than re-dissolved every
+  slot. It would otherwise blink to black and back each cycle, and R2b set the
+  same rule for a lone sim.
+- A named `images_dir` that doesn't exist gets a toast in the windowed app,
+  not a config problem. The validator stays pure, and the folder may be a
+  drive that isn't plugged in yet.
+
+**Verification.** `tests/test_slideshow.py` (22 tests): the default; nothing
+moving before `cycle_seconds` are up; each of the three rotations in
+sequence; the dissolve starting on every image entry; the lone image held;
+rescans at lap ends (a file sorting first but added mid-lap waits for the
+next lap, and a deleted one leaves); empty and missing folders falling back
+and picking up pictures as they arrive; the missing folder not created; the
+named folder never given the sample; broken files skipped in "images" and
+"mixed", retried after a "copy" finishes, and loaded once (not per frame) when
+reached by `N`; sims afresh after an image, and a lone sim left running under
+"patterns"; the windowed app never rotating; the manual keys; `--image`
+across rescans; "patterns" keeping a starting image; and real `main()` runs
+in all three modes, in dots and in braille with colour. `test_config.py` +6
+(both validators, precedence, argparse refusing a bad choice, the starter
+file's help) and `test_frozen.py` +1 (frozen: unset means beside the
+exe with the sample, named means read-only there, and captures beside the exe
+either way). **120 pass** (91 before), under pytest and file by file. Then 18
+hand-written mutants: no rescan, no alternation, no restart, sample into the
+named folder, named folder created, per-frame retries, the failure memo never
+cleared, no skip, "patterns" leaving an image, re-dissolving a lone image, no
+exception catch, the slideshow opening on a pattern, `--image` lost on
+rescan, the windowed app rotating, default `"patterns"`, no dissolve, no
+`images_dir` validation, no missing-folder toast. All 18 caught, each by the
+test meant for it. (One first "caught" was my own mutant's syntax error;
+redone properly, it's caught by the mid-copy test.)
+
+**Headless smoke** (`SDL_VIDEODRIVER=dummy`, `python main.py --screensaver
+--full-minutes 0.1 --throttle-minutes 0.05 --cycle-seconds 1 --images-dir
+<folder>`, one run per mode): all three exit 0 after 9.4 s, as the phases
+add up. A wrapper logging each change in the real loop showed fire → life →
+plasma for "patterns"; one → two → one ("broken.png" skipped silently) for
+"images"; and fire → one → life → two → plasma → one for "mixed". Run first
+by accident with only `broken.png` in the folder, all three still ran their
+9.4 s on patterns.
+
+**Measured, not fixed (logged in TODO "Found in passing"):**
+
+- Photo loads on this laptop: 40 ms for 1920×1080, 210 ms for 12 MP,
+  400 ms for 24 MP (braille and colour cost about the same). That stalls the
+  animation as each photo arrives and starts the dissolve part-way in. In the
+  logged run a 12 MP photo took 189 ms. JPEG `draft()` decoding is the likely
+  fix if the field run minds. It's in `engine.py`, not the surface cache.
+- EXIF orientation is ignored: a test JPEG tagged "rotate 90°" loaded
+  unrotated, so upright phone photos will show sideways.
+
+**Worth Matthew's eye:** with no `images_dir`, the app's own `images/` always
+holds the generated sample, so out of the box mixed shows the same rings
+picture in every other slot. That is the spec as written (the "empty folder →
+patterns" fallback never applies to the app's own folder), but it may not be
+what "a fresh install alternates patterns and images" pictured. It's on the
+run sheet (TODO step 3b) with the options.
+
+**Not tested here:** anything on a real screen, a real folder of photos, and
+the throttle with a photo up for a long time. No `.exe`/`.scr` rebuild: that
+waits for the end of R2. Until then the builds treat both new keys as unknown
+settings and ignore them. Nothing pushed.
+
 ## 2026-10-26 — R2d shipped: the Mandelbrot zoom (13 → 14 patterns)
 
 A side session in its own worktree, alongside R2c, to the R2d spec in TODO.
@@ -894,3 +1009,11 @@ included, and the per-cell fallback looks good, so it's left alone.
 (pace, shimmer near the set), real fps, and a real screensaver run. No
 `.exe`/`.scr` rebuild: that's the one at the end of R2. TODO's run sheet gains
 the zoom checks. Nothing pushed.
+
+**Merged with R2c.** R2c landed on `main` while this was being built, so
+`main` is merged into this branch (only TODO and WORKLOG conflicted; both
+sessions' text is kept, R2c's entry first since it landed first). R2c's
+`GenerativeField.restart()` only touches sims, so the zoom is unaffected; the
+zoom's throttled screensaver test now runs under R2c's mixed rotation. **135
+pass** on the merged tree. With R2a–R2d all in, R2 is complete; the one rebuild
+of both binaries is next, and that's Matthew's to run.

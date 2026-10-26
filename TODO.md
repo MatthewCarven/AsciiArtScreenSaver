@@ -13,8 +13,11 @@ as well as the `.scr`; both smoke-tested 2026-10-26. **R2b shipped
 2026-10-26** — fire and Life, the first stateful patterns; 13 patterns now
 (not in the builds yet: that rebuild waits for the end of R2). **Braille font
 check fixed 2026-10-26** (it was passing a font whose braille is a box; also
-waits for that rebuild). **R2d shipped 2026-10-26** — the Mandelbrot zoom, 14
-patterns now (also waits for that rebuild). R2c and R3–R4 not started.
+waits for that rebuild). **R2c shipped 2026-10-26**: the screensaver
+alternates patterns and your images by default (`cycle_content`, `images_dir`);
+also waits for the rebuild. **R2d shipped 2026-10-26** — the Mandelbrot zoom,
+14 patterns now (also waits for that rebuild). **That completes R2**: the one
+rebuild of both binaries is next, then R3 and R4.
 
 ---
 
@@ -36,8 +39,9 @@ Double-click it: it builds both `ASCIIVisualizer.exe` (the app) and
 builds just one). Right-click the new `.scr` → **Install**. This is the last
 rebuild you should need for a settings change. *Both are already built (the
 `.exe` on 2026-10-26, the `.scr` on 2026-10-15), so you can go straight to
-Install — but they predate R2b, so fire, Life and the Mandelbrot zoom are only
-in `python main.py` until the one rebuild at the end of R2.* Every other step below works with
+Install — but they predate R2b–R2d, so fire, Life, the slideshow and the
+Mandelbrot zoom are only in `python main.py` until the one rebuild at the end
+of R2.* Every other step below works with
 `ASCIIVisualizer.exe` in place of `python main.py`, and it's worth trying both
 at least once.
 
@@ -112,10 +116,42 @@ bottom line should show that path. Worth trying deliberately:
   matters** — a screensaver that won't start gives you no error at all, just
   nothing, so it must never die on a bad file.
 - `"cycle_patterns": ["plasma", "ripples"]` → the screensaver rotates only
-  those two, while `G` still reaches all eleven.
+  those two (with an image between them, since R2c's mixed rotation is the
+  default), while `G` still reaches all 14.
 
 Note: `%APPDATA%` is the right home for this file. "Beside the program" also
 works, but for an installed `.scr` that means `System32`, which needs admin.
+
+### 3b. The slideshow — new in R2c
+
+The screensaver now alternates patterns and images by default
+(`"cycle_content": "mixed"`). Point it at a folder of real photos in
+`config.json`, e.g. `"images_dir": "C:/Users/<you>/Pictures"` (forward
+slashes, or JSON wants `\\`), then:
+
+```
+python main.py --screensaver --cycle-seconds 8
+```
+
+- Pattern → photo → next pattern → next photo, each photo dissolving in.
+- Drop a new photo into the folder while it runs. It should turn up on the
+  next lap, once every photo already there has had a turn.
+- **Phone photos taken upright may come out sideways.** The loader ignores the
+  EXIF orientation tag (checked 2026-10-26; under "Found in passing" below).
+  Worth noting whether any of yours do it.
+- **Each photo stalls the animation briefly as it loads**: on this laptop about
+  40 ms for a 1080p picture, 200 ms for a 12 MP phone photo, 400 ms for 24 MP.
+  The dissolve starts that much of the way in. Say if the hitch shows.
+- **Without `images_dir`, the only image is the bundled sample**, so mixed puts
+  the same rings picture in every other slot. That's the spec as written,
+  because the app's own `images/` is never empty. If it grates, the choices
+  are to leave the sample out of the rotation, make the default `"patterns"`
+  until a folder is named, or leave it.
+- `"cycle_content": "images"` is a pure slideshow; `"patterns"` is the old
+  behaviour. An empty or missing folder should give patterns, never black.
+- The built `.exe` / `.scr` predate R2c. Until the end-of-R2 rebuild they
+  report `cycle_content` and `images_dir` as unknown settings (a toast) and
+  ignore them.
 
 ### 4. The Settings button
 
@@ -173,6 +209,23 @@ reads first. Rough notes are fine; no need to diagnose it.
       alpha. Braille now comes from DejaVu Sans here, and headless renders
       show real dots on an even grid. `tests/test_renderer.py`; WORKLOG
       2026-10-26 has the measurements.
+- [ ] **Photos ignore their EXIF orientation** (found 2026-10-26 during R2c).
+      `engine.load_image_fields` does `Image.open(path).convert("RGB")`, so a
+      phone photo stored landscape with an "upright" tag shows sideways. That
+      was checked with a tagged test JPEG (orientation 6): it came out
+      unrotated. It matters more now that the slideshow is meant for a folder
+      of real photos. Likely fix: `ImageOps.exif_transpose(img)` before the
+      convert, plus a test with a tagged image. It affects `N`/`P` and
+      `--image` too, all for the better. New code, so it rides the end-of-R2
+      rebuild.
+- [ ] **Big photos are slow to load** (measured 2026-10-26 during R2c, this
+      laptop): about 40 ms for 1920×1080, 210 ms for a 12 MP 4032×3024 JPEG,
+      400 ms for 24 MP. The animation stalls that long as each photo arrives,
+      and the dissolve starts part-way in. Only worth fixing if the field run
+      notices. Likely fix: `img.draft("RGB", (w, h))` for JPEGs before the
+      convert, which decodes at 1/2, 1/4 or 1/8 scale (the target is only a
+      few hundred pixels across). Not the image-surface cache, which stays
+      as decided.
 
 ---
 
@@ -250,9 +303,9 @@ for settings, ever.
 
 ---
 
-## R2 — More generative patterns & the slideshow ⏳ scoped 2026-08-05
+## R2 — More generative patterns & the slideshow ✅ shipped 2026-10-26
 
-Planned with Matthew 2026-08-05; R2a, R2b and R2d built since. Verdict on the candidate
+Planned with Matthew 2026-08-05; R2a, R2b, R2c and R2d all built since. Verdict on the candidate
 list: **all of them** — fire, rain, lava lamp, Life, tunnel, galaxy, fireflies,
 Mandelbrot zoom, and (promoted 2026-08-10) the *Electric !* homage
 (5 → 14 patterns) — plus the **image slideshow, unparked** from
@@ -336,7 +389,26 @@ Verify: reset-on-resize, substep cap, pause-freezes-sim, throttle behaviour at
 faked timestamps, plus the usual eyeballed renders. The session with the
 architecture risk carries the tests.
 
-### R2c — slideshow in the rotation
+### R2c — slideshow in the rotation ✅ shipped 2026-10-26
+
+Built as planned below, all in `app.py` plus the two config keys and a
+`GenerativeField.restart()`. The rotation is `App._ss_cycle`: mixed asks for
+an image after each pattern and the next pattern after each image, and
+"images" asks for an image every slot. Whenever no image can be shown (none
+in the folder, the folder missing, or nothing in it loading), the slot goes to
+the next pattern instead. The slideshow keeps its own place in the list and
+rescans the folder when a lap ends, so a file dropped in mid-lap joins the next
+one. Coming back from an image onto the same sim (a one-pattern rotation)
+restarts it, as any switch to a sim does. Beyond the spec: an image that won't
+load is skipped, not fatal (a file still being copied into a watched folder is
+the likely case), and it's retried next lap. A lone image in an "images"
+slideshow is held, not re-dissolved every slot. `images_dir` takes `~` and
+`%VAR%`; the folder is only read, never created, and never gets the sample.
+"patterns" is the old behaviour exactly, including staying on an image the
+saver was started on. Tests: `tests/test_slideshow.py` (22, sequencing at
+faked timestamps and real runs in all three modes) plus config and frozen-path
+checks: 120 in total, and 18 of 18 mutants caught. WORKLOG 2026-10-26 has the
+details. Original plan:
 
 - `cycle_content`: `"patterns" | "images" | "mixed"` (default `"mixed"`) — what
   the screensaver rotates. Mixed alternates pattern → image → next pattern →
@@ -369,7 +441,7 @@ not done:** Mandelbrot only, dives rotating through the five targets. Braille
 computes once per cell and interpolates: measured, full 2×4 costs 18 ms median
 / 50 ms max a frame for the pattern alone. Timings, the target hunt and the
 precision check are in WORKLOG 2026-10-26; tests are `tests/test_zoom.py`
-plus the contract checks (106 in total). Original plan:
+plus the contract checks (135 in total with R2c's merged in). Original plan:
 
 Mandelbrot/Julia endless zoom. Pure `(X, Y, t)` but the heaviest per frame:
 escape-time with early-exit masking, an iteration budget that scales with zoom
@@ -383,7 +455,8 @@ and upsamples for braille — measured, not guessed.
 One `.scr` rebuild picks up all of it — new *code* needs a rebuild, settings
 never do (R1's whole point). Fold that rebuild into the still-open field run,
 whose sheet gains: `G` through 14 patterns, mixed rotation against a folder of
-real photos, and rain/fire/Life watched at both 60 fps and the 2 fps throttle.
+real photos (step 3b, there since R2c), rain/fire/Life watched at both
+60 fps and the 2 fps throttle, and a whole Mandelbrot dive (step 1).
 
 ---
 
