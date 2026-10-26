@@ -24,13 +24,23 @@ _BRAILLE_CANDIDATES = (
     "dejavusansmono", "dejavusans", "notosansmono", "notosanssymbols2",
     "segoeuisymbol", "seguisym", "symbola", "freemono",
 )
-_BRAILLE_TEST = "⣿"
+# A full cell and a single dot: real braille draws them with very different
+# ink, a font's missing-glyph box draws both the same.
+_BRAILLE_TEST = ("⣿", "⠁")
 
 
 def _has_braille(font: "pygame.font.Font") -> bool:
+    """Whether ``font`` really draws braille, decided by rendering.
+
+    ``font.metrics`` answers for the missing-glyph box too, so it passes a font
+    with no braille at all (this laptop's DejaVu Sans Mono). Ink is read from
+    alpha: a render with no background is an SRCALPHA surface whose RGB is the
+    text colour everywhere, glyph or not.
+    """
     try:
-        m = font.metrics(_BRAILLE_TEST)
-        return bool(m) and m[0] is not None
+        full, dot = (int(pygame.surfarray.array_alpha(
+            font.render(c, True, (255, 255, 255))).sum()) for c in _BRAILLE_TEST)
+        return full > dot
     except Exception:
         return False
 

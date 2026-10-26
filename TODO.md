@@ -11,8 +11,9 @@ build order agreed). **R2a shipped 2026-08-11** — 11 patterns now.
 **Build script 2026-10-15**: `build.bat` makes a standalone `ASCIIVisualizer.exe`
 as well as the `.scr`; both smoke-tested 2026-10-26. **R2b shipped
 2026-10-26** — fire and Life, the first stateful patterns; 13 patterns now
-(not in the builds yet: that rebuild waits for the end of R2). R2c–R2d and
-R3–R4 not started.
+(not in the builds yet: that rebuild waits for the end of R2). **Braille font
+check fixed 2026-10-26** (it was passing a font whose braille is a box; also
+waits for that rebuild). R2c–R2d and R3–R4 not started.
 
 ---
 
@@ -62,13 +63,14 @@ python main.py
   --full-minutes 0 --cycle-patterns fire,life` starts already throttled (any
   key exits). Braille fire at 2 fps takes most of a 20 s slot to climb the
   screen. That's expected; say if it bothers you.
-- `1` `2` `3` switch palettes. **Braille (`3`) is the one to watch**: Windows'
-  Consolas has no braille glyphs, so if DejaVu Sans Mono isn't installed you
-  should get a toast saying so rather than a screen of empty boxes. Either
-  outcome is worth recording. *Found 2026-10-26: on this laptop DejaVu Sans
-  Mono **is** installed but its copy has no braille glyphs, and the check is
-  fooled — expect empty boxes and no toast. That's the bug under "Found in
-  passing" below, not a new one.*
+- `1` `2` `3` switch palettes. **Braille (`3`) is the one to watch**: it needs
+  a font that really draws the braille block, and since 2026-10-26 the app
+  checks by drawing. This laptop's DejaVu Sans Mono has no braille in it, so
+  braille now comes from DejaVu Sans (elsewhere on Windows, Segoe UI Symbol):
+  expect real dots, not empty boxes, and a toast only if no font has them.
+  Worth a look at a few font sizes (`[`/`]`) to see the dots read evenly.
+  *The built `.exe` and `.scr` predate that fix, so they still draw boxes
+  here until the end-of-R2 rebuild.*
 - `C` colour, `+`/`-` density, `[`/`]` resolution, `Tab` image mode, `N`/`P`
   through `images/`, `S` saves a PNG to `captures/`.
 - HUD should fade after 15 s of no input and relight the instant you touch
@@ -145,7 +147,7 @@ reads first. Rough notes are fine; no need to diagnose it.
 
 ## Found in passing — for a session
 
-- [ ] **Braille shows empty boxes on this laptop, with no toast** (found
+- [x] **Braille shows empty boxes on this laptop, with no toast** (found
       2026-10-26 during R2b's headless checks). `C:\Windows\Fonts\DejaVuSansMono.ttf`
       is installed, but its copy has no braille glyphs: every braille codepoint
       draws the same missing-glyph box (identical ink to a private-use
@@ -157,6 +159,10 @@ reads first. Rough notes are fine; no need to diagnose it.
       different ink, so the search falls through to a font that has them. Small
       and self-contained; it touches every braille frame, so check alignment in
       a headless render afterwards. New code, so it rides the end-of-R2 rebuild.
+      **Fixed 2026-10-26** as suggested: ⣿ must draw more ink than ⠁, read from
+      alpha. Braille now comes from DejaVu Sans here, and headless renders
+      show real dots on an even grid. `tests/test_renderer.py`; WORKLOG
+      2026-10-26 has the measurements.
 
 ---
 
@@ -451,7 +457,8 @@ don't need rediscovering.
   and a one-shot `convert` command needing no GUI. (Absorbs the old "export to
   animated GIF" backlog item.)
 - **Test suite** — started in R1 (`tests/`, 46 tests, runs with or without
-  pytest). Still missing: engine/palette/renderer coverage, which R4 wants.
+  pytest). Still missing: engine/palette coverage, which R4 wants, and most
+  of the renderer (only its braille font check is tested, since 2026-10-26).
 - **Screen-capture source** — desktop or a chosen region rendered live as ASCII.
 - **Image slideshow** — *unparked 2026-08-05*, now R2c above. Only the drift +
   crossfade half stays parked here, with Transitions & post-FX.

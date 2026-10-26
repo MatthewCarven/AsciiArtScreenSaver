@@ -666,3 +666,67 @@ faked timestamps and headless 2 fps driving), and mono (the sheets were
 colour-on; mono draws the same glyphs in one colour). No `.exe`/`.scr`
 rebuild: that waits for the end of R2, so the builds don't have fire or Life
 yet. TODO's run sheet says so and gains the fire/Life checks. Nothing pushed.
+
+## 2026-10-26 — Braille font check fixed: decided by drawing
+
+A side session, picking up the TODO item R2b logged: on this laptop braille
+drew empty boxes, and the "no braille-capable font" toast never fired.
+
+**Cause, confirmed by probe.** `_has_braille` asked `font.metrics("⣿")`, and
+SDL_ttf answers that for the missing-glyph box too. This laptop's
+`DejaVuSansMono.ttf` has no braille: ⣿, ⠁, the blank U+2800 and a private-use
+U+E000 all draw the same box with the same ink. So the mono font passed, and
+the search never reached a font that has the glyphs. Consolas, Courier New
+(what `match_font("freemono")` answers here) and pygame's own bundled font
+draw boxes too. DejaVu Sans and Segoe UI Symbol draw real dots. The README
+promised a toast when no font has braille, but on Windows the old check would
+have passed Consolas the same way, so that toast could never have fired there.
+
+**Fix** (`renderer._has_braille`, a few lines): render ⣿ and ⠁ and require the
+full cell to carry more ink than the single dot. A box draws both the same, a
+blank draws neither. Ink is the sum of `surfarray.array_alpha`: a render with
+no background is an SRCALPHA surface whose RGB is the text colour everywhere,
+so RGB can't tell glyphs apart. Now the mono font fails, the search falls
+through to DejaVu Sans (the next candidate), and the toast fires only when no
+candidate draws braille. A Windows machine without DejaVu should land on
+Segoe UI Symbol, so on Windows the toast should be rare.
+
+**Tests** (`tests/test_renderer.py`, 4). pygame's bundled font ships with every
+pygame and has no braille, so it is the missing-glyph case on any machine. It
+must fail at sizes 6, 16 and 32, and so must stand-in fonts that draw one box
+for everything or nothing at all. A stand-in that draws one dot per raised bit
+must pass, and so must DejaVu Sans and Segoe UI Symbol wherever they're
+installed. Those are matched by file name, because `match_font` answers a
+missing family with another of its alias group (no DejaVu Sans gives Arial).
+At the `Renderer` level: when every font draws boxes, `braille_ok` is False,
+which is what fires the toast. When the mono font and the first candidate draw
+boxes, the search falls through to a real one. The stand-in renders the way
+pygame does (text colour everywhere, glyph in alpha), so an RGB-based check
+fails the suite even on a machine with no braille font. Mutation check, six
+mutants of the check: the old metrics one, ink from RGB, `>=` for `>`, always
+True, always False, and ⣿ against the blank U+2800 instead of ⠁. All caught
+but the last, which is an equally valid render check, not a test gap. **91
+pass** (87 before), under pytest and standalone.
+
+**Alignment**, checked headless (`SDL_VIDEODRIVER=dummy`, 1280×720 braille at
+the default size 16). Tunnel, electric and Life now draw real dots, where the
+old choice drew a box per cell. DejaVu Sans isn't monospaced: its braille
+advance is 12 px against the mono cell's 10. But the renderer places braille
+at fixed cell origins, so nothing drifts, and Life's blocks, beehives and
+blinkers sit on an even grid. Measured over sizes 12–40, the ⣿ ink stays
+inside the cell both ways, and the dot columns land within about 2 px of the
+cell's quarter points, leaning right a little more at larger sizes.
+Vertically, at size 16, the rows sit 4, 5 and 4 px apart, with 6 px across a
+cell boundary. That spacing comes from the font's own glyph, not from the
+fallback. Segoe UI Symbol, measured the same way, sits lower in the cell
+(4 px at size 16) and draws bigger, rounder dots. Its bottom row reaches a few
+pixels past the cell but never touches the next row's dots, and its frames
+look right. At size 8 and below, the dots run together in both fonts: that's
+the resolution floor, not a font problem.
+
+**Left alone:** the toast still says "install DejaVu Sans Mono" (`app.py`,
+out of this session's scope). That's still sound advice, since a full copy
+has braille; it's this laptop's copy that doesn't. README's braille note now
+describes the check. No `.exe`/`.scr` rebuild: the builds keep the old check,
+and draw boxes here, until the end-of-R2 rebuild. TODO's run sheet says so.
+Nothing pushed.

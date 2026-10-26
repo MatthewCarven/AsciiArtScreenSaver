@@ -23,10 +23,12 @@ Dependencies: `pygame`, `Pillow`, `numpy`. The video/webcam source also needs
 `opencv-python` (optional — everything else runs without it).
 
 > **Braille palette note:** braille glyphs need a font that includes the Unicode
-> Braille Patterns block. **DejaVu Sans Mono** (very common; ships with many
-> tools) works perfectly. If no braille-capable font is found, the app tells you
-> and the other two palettes still work. On Windows, installing DejaVu Sans Mono
-> is the easiest fix — Consolas alone does not include braille.
+> Braille Patterns block. The app tests each candidate by drawing two braille
+> glyphs, so a font that only has a missing-glyph box doesn't count, and uses the
+> first that really draws them: **DejaVu Sans Mono**, then **DejaVu Sans**,
+> **Segoe UI Symbol** (installed with Windows) and a few others. If none does,
+> the app tells you and the other two palettes still work. Consolas alone does
+> not include braille, and not every copy of DejaVu Sans Mono does either.
 
 ## Run
 
