@@ -16,11 +16,12 @@ captures/
 images/*
 !images/sample_rings.png
 
-# PyInstaller screensaver build artifacts
+# PyInstaller build artifacts (build.ps1): the app and the screensaver
 build/
 dist/
 *.spec
 *.scr
+*.exe
 
 # The 1997 "Electric !" screensaver (JX Bardant) — reference shrine, not ours to track
 electric/

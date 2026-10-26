@@ -458,3 +458,89 @@ sheet eyeballed — tunnel and electric are spectacular there.
 motion, colour-on appearance (still the global blue gradient until R2b's warm
 hook), and real fps on his hardware. Run sheet updated in TODO's field-run
 section. No `.scr` rebuild yet — that still waits for the end of R2.
+
+## 2026-10-15 — One build script for the app and the screensaver
+
+*(Written up 2026-10-26 from the diff and that session's transcript: the
+session stopped partway through its smoke test, before any commit or worklog
+entry. Finished in the entry below.)*
+
+The ask: build the visualizer as a standalone app, not just as the screensaver.
+
+- **`build.ps1` + `build.bat` replace `build_screensaver.ps1` / `.bat`.**
+  Targets `all` (default), `app`, `screensaver`; `-Python` builds from a venv.
+  It checks pygame/numpy/Pillow first, installs PyInstaller if it's missing,
+  gives each target its own `dist\` and `build\` subfolders, and copies the
+  result into the project folder. `ASCIIVisualizer.exe` comes from `main.py`
+  and includes OpenCV if it's installed (73 MB). `ASCIIVisualizer.scr` comes
+  from `screensaver.py` and always leaves OpenCV out (38 MB, faster to unpack
+  on every launch). `build.bat` is the double-click wrapper and pauses at the
+  end.
+- **Found and fixed: the built versions lost every screenshot.** `app.py`
+  located `images/` and `captures/` from `__file__`, which in a one-file build
+  points into PyInstaller's temporary unpack folder, deleted on exit. So S-key
+  captures from the `.scr` vanished, and photos dropped beside it were never
+  seen. New `config.data_dir()`: the project folder from source, as before;
+  beside the `.exe` / `.scr` when frozen; `%APPDATA%\ASCIIVisualizer` when that
+  folder can't be written to (a `.scr` copied into `System32`). A failed
+  capture is now a toast, not an exception, and a missing images folder means
+  no images, never a failed start.
+- **`main.py` gives the windowed exe a console when there is one.** A
+  `--windowed` build has none, so `--help`, `--list-patterns`, `--write-config`
+  and option errors printed to nowhere. Run from a terminal, it now borrows that
+  terminal's console (it didn't work in the real build yet; see 2026-10-26).
+  The pygame banner is hidden in the exe.
+- `tests/test_frozen.py`: 6 tests, faking the frozen state by patching
+  `sys.frozen` / `sys.executable`. 62 in total. README's build section
+  rewritten, TODO run sheet step 0 points at `build.bat`, `.gitignore` gains
+  `*.exe`.
+- Both built that night (`.scr` 23:30, `.exe` 23:32), with R1 and R2a in them.
+
+## 2026-10-26 — Smoke-testing both builds; the console hookup fixed
+
+Both binaries were newer than every source file they're built from, so they
+were tested as built. All runs happened on copies in a scratch folder, with
+`SDL_VIDEODRIVER=dummy`, so nothing opened on screen except one Notepad.
+
+**`.exe`.** A headless run of the copy, started from `%TEMP%` on
+`--pattern electric`, stayed up for 10 s and created `images/sample_rings.png`
+beside the copy. So `data_dir()` holds in the real build, not just under the
+patched tests. `--write-config PATH` wrote a correct file.
+
+**But nothing printed in a terminal**, not `--list-patterns`, `--help` or a bad
+option. Cause: a one-file PyInstaller build on Windows is two processes. The
+launcher unpacks Python and starts a second copy of itself, which runs the
+program; the process tree read pwsh → launcher → Python. So
+`AttachConsole(ATTACH_PARENT_PROCESS)` asked the launcher, which has no
+console, and the failure was swallowed. The 2026-10-15 tests couldn't catch
+it: only the real build is two processes. **Fix:** if the parent has no
+console, attach to the grandparent's, found with a Toolhelp process snapshot
+(`main._parent_pid`). It loads its own `WinDLL("kernel32")` handle, so its
+`argtypes` don't leak into `ctypes.windll.kernel32` for pygame. A new test
+checks it against `os.getppid()`; 63 tests in total. Rebuilt the `.exe` (22 s).
+`--list-patterns` (all 11), the bad-option error and `--help` now print, en and
+em dashes intact. Typed straight at a PowerShell prompt, the output lands after
+the next prompt, because PowerShell doesn't wait for a windowed program.
+That's expected, and it's in the README now.
+
+**`.scr`** (not rebuilt: `main.py` isn't part of it). `/p 12345` exits 0 in
+about a second. `/s` is still running headless at 10 s (and a stray one ran
+over two minutes without trouble). `/c`, with `ASCIIVIZ_CONFIG` pointed at the
+scratch folder, created the starter config and opened Notepad on it. `images/`
+appeared beside the copy.
+
+**Testing trap, for next time:** `Start-Process` on a `.scr` goes through the
+file association, `"%1" /S`, which throws the arguments away. A "/p" test
+silently ran the saver, and `-Wait` sat on it for good. Launch through
+`ProcessStartInfo` with `UseShellExecute = $false`.
+
+Also: `screensaver.py`'s docstring still named `build_screensaver.ps1`. Fixed;
+it's a comment, so no rebuild. TODO housekeeping: the `.scr` rebuild is done
+(R1 and R2a are in it). The `Claude.md` line-ending item has resolved itself:
+`core.autocrlf` is `true` now and git sees the file as clean.
+
+**Still Matthew's (needs a real screen):** in a real window, `S` in the built
+`.exe` should save into `captures/` beside it. The Settings button from
+Windows' own screensaver dialog (`/c` worked when launched directly). The rest
+of the field run. R2b–R2d are new code, so they'll need one more rebuild when
+R2 is done; settings never will.

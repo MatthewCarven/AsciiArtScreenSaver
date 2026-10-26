@@ -59,10 +59,14 @@ class App:
         pygame.init()
         pygame.display.set_caption("ASCII Visualizer")
 
-        self.project_dir = Path(__file__).resolve().parent.parent
+        # The project folder from source; beside the .exe / .scr when built.
+        self.project_dir = config.data_dir()
         self.images_dir = self.project_dir / "images"
         self.captures_dir = self.project_dir / "captures"
-        self.images_dir.mkdir(exist_ok=True)
+        try:
+            self.images_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass                # no images then; never a reason not to start
 
         self.opts = opts
         self.windowed_size = (opts.width, opts.height)
@@ -97,7 +101,10 @@ class App:
         self.images = self._scan_images()
         if not self.images:
             sample = self.images_dir / "sample_rings.png"
-            make_sample_image(str(sample))
+            try:
+                make_sample_image(str(sample))
+            except OSError:
+                pass
             self.images = self._scan_images()
         self.image_index = 0
         if opts.image:
@@ -153,6 +160,8 @@ class App:
     # Setup helpers
     # ------------------------------------------------------------------ #
     def _scan_images(self):
+        if not self.images_dir.is_dir():
+            return []
         return sorted(
             p for p in self.images_dir.iterdir()
             if p.is_file() and p.suffix.lower() in _IMAGE_EXTS
@@ -420,11 +429,16 @@ class App:
         self._begin_reveal()
 
     def _save_capture(self):
-        self.captures_dir.mkdir(exist_ok=True)
         name = time.strftime("ascii_%Y%m%d_%H%M%S.png")
         path = self.captures_dir / name
-        pygame.image.save(self.screen, str(path))
+        try:
+            self.captures_dir.mkdir(parents=True, exist_ok=True)
+            pygame.image.save(self.screen, str(path))
+        except (OSError, pygame.error) as exc:
+            self._toast(f"couldn't save {name}: {exc}", seconds=6.0)
+            return None
         self._toast(f"saved captures/{name}")
+        return path
 
     def _handle_key(self, key):
         if key in (pygame.K_ESCAPE, pygame.K_q):

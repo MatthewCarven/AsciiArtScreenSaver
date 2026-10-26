@@ -8,7 +8,9 @@ the most sense to build.
 Planned 2026-08-01. **R1 shipped 2026-08-01.** **R2 scoped in detail
 2026-08-05** with Matthew (all candidates chosen, slideshow unparked into it,
 build order agreed). **R2a shipped 2026-08-11** — 11 patterns now.
-R2b–R2d and R3–R4 not started.
+**Build script 2026-10-15**: `build.bat` makes a standalone `ASCIIVisualizer.exe`
+as well as the `.scr`; both smoke-tested 2026-10-26. R2b–R2d and R3–R4 not
+started.
 
 ---
 
@@ -19,14 +21,20 @@ A run sheet for the next sit-down. Roughly in order, but each step stands alone
 the sandbox has no camera, no Windows, and no screen, so everything below was
 verified logically rather than by looking at it.
 
-### 0. Rebuild the .scr once
+### 0. Build the app and the .scr once
 
 ```
-build_screensaver.bat
+build.bat
 ```
 
-Right-click the new `ASCIIVisualizer.scr` → **Install**. This is the last
-rebuild you should need for a settings change.
+Double-click it: it builds both `ASCIIVisualizer.exe` (the app) and
+`ASCIIVisualizer.scr` (2026-10-15; `build.bat app` or `build.bat screensaver`
+builds just one). Right-click the new `.scr` → **Install**. This is the last
+rebuild you should need for a settings change. *Both are already built from
+the current code (the `.exe` on 2026-10-26, the `.scr` on 2026-10-15), so you
+can go straight to Install.* Every step below works with
+`ASCIIVisualizer.exe` in place of `python main.py`, and it's worth trying both
+at least once.
 
 ### 1. The app, windowed
 
@@ -47,6 +55,10 @@ python main.py
   through `images/`, `S` saves a PNG to `captures/`.
 - HUD should fade after 15 s of no input and relight the instant you touch
   anything.
+- In `ASCIIVisualizer.exe`, `S` should save into `captures/` here, beside the
+  exe. Builds before 2026-10-15 saved into a temp folder that was deleted on
+  exit, so this is the fix to look for. The only part the smoke test couldn't
+  reach is the key press in a real window.
 
 ### 2. Webcam — still never tested
 
@@ -105,13 +117,13 @@ reads first. Rough notes are fine; no need to diagnose it.
 
 - [x] Git litter (`_to_delete/`, the orphaned `tmp_obj_*` objects) deleted
       2026-08-01, and the roadmap commit pushed.
-- [ ] **Rebuild the `.scr` once more** to pick up R1 (`build_screensaver.bat`).
-      This is the last rebuild you should ever need for a settings change — from
-      then on it's the Settings button.
-- [ ] `Claude.md` shows as modified in git: the content is identical, only the
-      line endings flipped to CRLF. Either commit it or `git checkout Claude.md`.
-      Setting `core.autocrlf` or adding a `.gitattributes` would stop it
-      recurring.
+- [x] **Rebuild the `.scr` once more** to pick up R1. Done 2026-10-15 with
+      `build.bat` (which replaced `build_screensaver.bat` and builds the app
+      `.exe` too); the build has R1 and R2a in it. Right-click → **Install** is
+      still yours to do. No more rebuilds for settings; new code (R2b–R2d)
+      gets one at the end of R2.
+- [x] `Claude.md` showed as modified (line endings only). Resolved by
+      2026-10-26: `core.autocrlf` is `true` now and git sees it clean.
 
 ---
 

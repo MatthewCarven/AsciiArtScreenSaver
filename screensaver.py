@@ -15,8 +15,8 @@ the Windows screensaver picker (the ``/c`` command line) opens that file in an
 editor, creating a starter one first if it doesn't exist yet. So retuning the
 saver no longer needs a rebuild.
 
-Build this into ``ASCIIVisualizer.scr`` with ``build_screensaver.ps1`` (or
-``.bat``) on Windows — see the README's "Windows screensaver" section.
+Build this into ``ASCIIVisualizer.scr`` with ``build.ps1`` (or ``build.bat``)
+on Windows — see the README's "Building the app and the screensaver" section.
 """
 
 import os

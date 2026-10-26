@@ -93,6 +93,29 @@ def program_dir() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def data_dir() -> Path:
+    """Folder holding ``images/`` and ``captures/``.
+
+    From source that's the project folder, as it always was. Frozen, it's the
+    folder holding the ``.exe`` / ``.scr``: the app used to work this out from
+    ``__file__``, which points into PyInstaller's temporary unpack folder, so
+    every S-key screenshot was wiped the moment the program closed. If the
+    program's folder can't be written to (a ``.scr`` copied into
+    ``System32``), the per-user settings folder stands in.
+
+    Creates ``images/`` as a side effect when frozen: that is the probe, and
+    the app needs the folder anyway.
+    """
+    home = program_dir()
+    if not getattr(sys, "frozen", False):
+        return home
+    try:
+        (home / "images").mkdir(exist_ok=True)
+        return home
+    except OSError:
+        return user_config_path().parent
+
+
 def user_config_path() -> Path:
     """Per-user config location, the conventional one for the platform."""
     if os.name == "nt":

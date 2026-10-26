@@ -103,8 +103,8 @@ The first of these that exists wins:
 2. the `ASCIIVIZ_CONFIG` environment variable
 3. `%APPDATA%\ASCIIVisualizer\config.json` (Windows)
    or `~/.config/asciiviz/config.json` (macOS/Linux)
-4. `config.json` next to the program — for the screensaver, that's the folder
-   holding `ASCIIVisualizer.scr`
+4. `config.json` next to the program — for the built app or screensaver, that's
+   the folder holding `ASCIIVisualizer.exe` / `ASCIIVisualizer.scr`
 
 Keys are the long option names with dashes turned into underscores, so
 `--throttle-minutes` is `"throttle_minutes"`:
@@ -133,22 +133,44 @@ unparseable one means defaults, and a single bad value falls back to its default
 while the rest still apply. Problems appear briefly in the HUD, and the HUD also
 shows which file is in effect.
 
-## Windows screensaver
+## Building the app and the screensaver (Windows)
 
-You can build a real Windows screensaver (`.scr`) from this project:
+One script builds a standalone app, a real Windows screensaver, or both, each
+as a single self-contained file that runs without Python installed:
 
 ```powershell
-pip install -r requirements.txt
-pip install pyinstaller
-powershell -ExecutionPolicy Bypass -File build_screensaver.ps1
+pip install -r requirements.txt                                  # once
+powershell -ExecutionPolicy Bypass -File build.ps1               # both
+powershell -ExecutionPolicy Bypass -File build.ps1 app           # just the .exe
+powershell -ExecutionPolicy Bypass -File build.ps1 screensaver   # just the .scr
 ```
 
-(or just double-click `build_screensaver.bat`). That produces
-`ASCIIVisualizer.scr`. Right-click it in Explorer and choose **Install** to
+Or double-click `build.bat` to build both, or run `build.bat app` /
+`build.bat screensaver` from a command prompt. PyInstaller is installed for you
+if it's missing, and `-Python path\to\python.exe` builds from a venv instead.
+
+| File | Built from | What it is |
+| ---- | ---------- | ---------- |
+| `ASCIIVisualizer.exe` | `main.py` | The app. Double-click it, or give it the same options as `python main.py`, from a shortcut or a terminal (`ASCIIVisualizer.exe --help`). Webcam and video are included if `opencv-python` was installed when you built it. |
+| `ASCIIVisualizer.scr` | `screensaver.py` | The screensaver. It leaves OpenCV out, so it's smaller and starts faster. |
+
+Run from a terminal, the `.exe` prints into it (`--help`, `--list-patterns`,
+`--write-config`, option errors). It's a windowed program, so the terminal
+doesn't wait for it: typed straight at a prompt, the text can land after the
+next prompt. Press Enter for a fresh one.
+
+Both read the same `config.json` (see above), and both keep `images/` and
+`captures/` beside themselves. Built here, that means the same folders
+`python main.py` uses.
+
+### Installing the screensaver
+
+Right-click `ASCIIVisualizer.scr` in Explorer and choose **Install** to
 preview and set it, or copy it into `C:\Windows\System32` so it shows up in
-Settings → Lock screen → Screen saver. It runs fullscreen, hides the cursor,
-auto-cycles through the generative patterns, and quits on any key or real mouse
-movement.
+Settings → Lock screen → Screen saver. (From `System32` it can't write beside
+itself, so its `images/` folder moves to `%APPDATA%\ASCIIVisualizer`.) It runs
+fullscreen, hides the cursor, auto-cycles through the generative patterns, and
+quits on any key or real mouse movement.
 
 To stay quiet when you're away it winds down in phases: full speed for
 `--full-minutes` (default 5), then it throttles to `--idle-fps` (default 2) for
@@ -187,8 +209,9 @@ rendered once into a cached surface.
 ## Project layout
 
 ```
-main.py              # entry point (also: python -m asciiviz)
+main.py              # entry point (also: python -m asciiviz); built into ASCIIVisualizer.exe
 screensaver.py       # Windows .scr entry point (/s run, /c settings, /p preview)
+build.ps1            # builds the .exe and/or .scr (build.bat is the double-click wrapper)
 asciiviz/
   config.py          # config.json discovery, validation, defaults
   palettes.py        # the three palette definitions
