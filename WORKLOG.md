@@ -544,3 +544,125 @@ it's a comment, so no rebuild. TODO housekeeping: the `.scr` rebuild is done
 Windows' own screensaver dialog (`/c` worked when launched directly). The rest
 of the field run. R2b–R2d are new code, so they'll need one more rebuild when
 R2 is done; settings never will.
+
+## 2026-10-26 — R2b shipped: fire and Life, the stateful pair (11 → 13 patterns)
+
+Built in a side session started from the build-script session, to the R2b
+spec in TODO and the 2026-08-05 decisions. Fire and Life are the first patterns
+with memory, so this is the one R2 session that changed the contract.
+
+**The contract change** (`patterns.py`, `generative.py`, about 30 lines of
+plumbing):
+
+- `patterns.Simulation` is the base both sims share. A sim advances in fixed
+  ticks of `1/rate` s, and how many are due is worked out from `t` alone, so
+  pause (which freezes `t`) freezes it with no code of its own. At most
+  `MAX_STEPS = 6` ticks a frame; when it's further behind (the 2 fps throttle,
+  or coming back from image mode) it runs the last six, stamped across the
+  last six tick intervals, and re-anchors at `t`. The dropped ticks are never
+  owed, so it can't snowball. State is keyed by the field's shape, which is
+  what catches a palette switch (braille changes the sub-resolution without
+  any resize). The RNG is reseeded on every fresh start, so the same
+  timestamps always give the same frames, which is what made it testable.
+- `GenerativeField` calls `reset()` on every sim in `set_dims` (resize, font
+  size), and on a sim when it is switched *to*. Re-selecting the pattern
+  you're already on doesn't reset it, so a one-pattern `cycle_patterns` doesn't
+  restart Life every 20 s.
+- **Beyond the spec, one line:** each `GenerativeField` takes a `copy.copy` of
+  the sim prototypes in `PATTERNS`, so two fields never share one sim. The app
+  only ever has one field, but the tests make dozens, and a module-level
+  singleton with state is a trap waiting for the next person.
+- The eleven existing patterns are untouched; a test pins that they're still
+  plain functions with no `reset`.
+
+**Fire** (`Fire`): the Doom algorithm, vectorised as a gather. Each tick a
+cell takes the heat of a random neighbour in the row below (offsets −1…+2:
+Doom's leftward wind), minus `cool` on half the ticks. Two scalings keep it
+looking the same in every palette: cooling is `2 / (REACH·h)`, so flames
+reach the same share of the screen at any size, and the tick rate is
+`30 Hz × (h / rows)`, so braille (4 sub-rows a cell) ticks at 120 Hz and the
+flames rise at the same on-screen speed.
+
+**Life** (`Life`): B3/S23 on a torus, neighbour count from four `np.roll`s,
+10 generations/s, at full braille sub-resolution as decided. Trails fade on
+`t`, not on generations: each cell remembers when it was last alive and glows
+`0.85·exp(−age/1.4 s)`, so the fade is smooth at 60 fps although the board
+changes ten times a second. **Beyond the spec:** every 40 generations a patch
+of fresh soup lands somewhere. Left alone, Life settles into still lifes and
+blinkers, and a Life-only rotation would sit on a static board for good.
+
+**Colour:** `app._GEN_GRADIENTS` maps `fire` → ember (120,22,4)→(255,200,90)
+and `life` → phosphor (14,72,30)→(150,255,160); everything else keeps
+`_GEN_LOW`→`_GEN_HIGH`. Colour is still the `C` toggle (off by default), and
+it applies to dots and ramp only: braille generative has always drawn in one
+colour, for every pattern. Left alone as out of scope; R3's themes are the
+natural place for it.
+
+**Tuning story** (headless contact sheets at 1920×1080 with colour on, all
+three palettes, at 1.5 / 6 / 20 s, driven at 60 fps and at 2 fps):
+
+- Fire's first render was a flat band: bright only in the bottom rows, with a
+  haze of faint dots above. The density crush hides heat below 0.4, and
+  that's exactly where all of the raggedness is. Fix: the R2a pre-lift
+  (`0.42 + 0.58·heat` wherever heat is non-zero), so the tips fade to the
+  threshold instead of hiding.
+- Then it stood as an even wall of fire: Doom's coals are uniformly
+  white-hot. **A deliberate departure from Doom:** the bottom row is now two
+  slow sine waves beating against each other (0.65–1.15, clipped later), so
+  the flames surge and slump in places. That one change gave real leaning
+  tongues, clearest in braille.
+- Then it was dim and short; hotter coals and `REACH` 0.62 → 0.70 settled it.
+  In dots at full resolution: hot yellow clumps at the base, embers reddening
+  as they rise. Lovely.
+- Life looked right on the first render: phosphor-green cells, recognisable
+  blocks, beehives and blinkers, soft `:` `.` afterglow behind anything that
+  moved. Braille is the promised richer soup.
+
+**Timings** (field compute per frame at 60 fps, 192×56 cells / 384×224
+braille, this laptop): fire 0.14 ms / 3.3 ms (2 ticks a frame in braille),
+Life 0.18 ms / 1.8 ms. (R2a's figures, lava ~8 ms braille, were taken on the
+old sandbox's CPU, so they don't compare directly.)
+
+**At the 2 fps throttle:** fire wants 15 ticks a frame and gets 6, so it runs
+at 40% speed (braille 10%, where igniting takes most of a 20 s slot). Slower,
+not broken, as the spec says. Life wants 5 a frame, under the cap, so it keeps
+full speed and simply shows every fifth generation. The 2 fps sheets match the
+60 fps ones once fire is lit.
+
+**Verification:** `tests/test_stateful.py` (19 tests): reset on resize, on
+palette switch (by shape) and on switching to a sim; the substep cap, and
+that dropped ticks aren't owed; braille ticking 4× faster; pause freezing the
+sim, at the field level and through the real `run()` loop with a posted Space
+key next to an unpaused control run; the throttle at faked timestamps (fire at
+6 ticks a frame and still burning, Life at full speed, and a 60 → 2 fps
+switch driven by the app's own `_ss_fps`); Life's full rule table for every
+neighbour count, wrap-around, a glider, and an emptied board coming back; the
+colour override, read off the colour grid handed to the renderer; and real
+`main()` runs on both sims in all three palettes inside `sandbox()`.
+`tests/test_patterns.py` gained five contract checks (13 names, only the pair
+stateful, per-field copies, the sims drawing from their first frame on,
+repeatability) and now runs the density check over the pair too. **87 pass**
+(63 before), standalone and under pytest. Then a mutation check: 15
+hand-written mutants of the new code (no cap, owed ticks, ignoring `t`, no
+shape key, no resets, shared sims, HighLife's B36, no splashes, trails by
+generation, no gradient...). Two lived at first, B36 and no-splash, and those
+tests were sharpened (the rule table; an emptied board must revive within 40
+generations). After that all 15 were caught. Plus headless `main.py` runs:
+`--pattern fire --color`, `--pattern life --palette braille`, and screensaver
+rotation through fire → life → plasma.
+
+**Found in passing, not fixed (out of scope):** on this laptop braille draws
+empty boxes, and the "install DejaVu" toast never fires.
+`DejaVuSansMono.ttf` is installed but has no braille glyphs, and
+`_has_braille`'s `metrics()` check passes the missing-glyph box. My braille
+sheets borrowed DejaVu Sans, which has them. Logged in TODO under "Found in
+passing", with a likely fix. R2a's braille sheets were made in the old
+sandbox, with whatever fonts it had, so they never showed what this laptop
+shows.
+
+**Not tested here:** anything on a real screen. That covers how fire and Life
+feel in motion, real fps, a real screensaver run reaching the throttle (only
+faked timestamps and headless 2 fps driving), and mono (the sheets were
+colour-on; mono draws the same glyphs in one colour). No `.exe`/`.scr`
+rebuild: that waits for the end of R2, so the builds don't have fire or Life
+yet. TODO's run sheet says so and gains the fire/Life checks. Nothing pushed.

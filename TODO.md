@@ -9,8 +9,10 @@ Planned 2026-08-01. **R1 shipped 2026-08-01.** **R2 scoped in detail
 2026-08-05** with Matthew (all candidates chosen, slideshow unparked into it,
 build order agreed). **R2a shipped 2026-08-11** — 11 patterns now.
 **Build script 2026-10-15**: `build.bat` makes a standalone `ASCIIVisualizer.exe`
-as well as the `.scr`; both smoke-tested 2026-10-26. R2b–R2d and R3–R4 not
-started.
+as well as the `.scr`; both smoke-tested 2026-10-26. **R2b shipped
+2026-10-26** — fire and Life, the first stateful patterns; 13 patterns now
+(not in the builds yet: that rebuild waits for the end of R2). R2c–R2d and
+R3–R4 not started.
 
 ---
 
@@ -30,9 +32,10 @@ build.bat
 Double-click it: it builds both `ASCIIVisualizer.exe` (the app) and
 `ASCIIVisualizer.scr` (2026-10-15; `build.bat app` or `build.bat screensaver`
 builds just one). Right-click the new `.scr` → **Install**. This is the last
-rebuild you should need for a settings change. *Both are already built from
-the current code (the `.exe` on 2026-10-26, the `.scr` on 2026-10-15), so you
-can go straight to Install.* Every step below works with
+rebuild you should need for a settings change. *Both are already built (the
+`.exe` on 2026-10-26, the `.scr` on 2026-10-15), so you can go straight to
+Install — but they predate R2b, so fire and Life are only in `python main.py`
+until the one rebuild at the end of R2.* Every other step below works with
 `ASCIIVisualizer.exe` in place of `python main.py`, and it's worth trying both
 at least once.
 
@@ -42,15 +45,30 @@ at least once.
 python main.py
 ```
 
-- `G` cycles patterns — now all 11: the original five plus rain, lava, tunnel,
-  galaxy, fireflies, electric (R2a, 2026-08-11). Worth a slow lap in each
-  palette: electric's flowing bands and the tunnel are the showpieces, braille
-  makes both spectacular, and fireflies is deliberately the calm one. This is
-  windowed `python main.py` — no rebuild needed to see any of it.
+- `G` cycles patterns — now all 13: the original five plus rain, lava, tunnel,
+  galaxy, fireflies, electric (R2a, 2026-08-11), then fire and Life (R2b,
+  2026-10-26). Worth a slow lap in each palette: electric's flowing bands and
+  the tunnel are the showpieces, braille makes both spectacular, and
+  fireflies is deliberately the calm one. This is windowed `python main.py` —
+  no rebuild needed to see any of it.
+- **Fire and Life at 60 fps and at the 2 fps throttle** (R2b). They're the
+  first patterns with memory, so the questions are new: press `C` for colour
+  (fire is ember-orange, Life phosphor-green). `Space` should freeze both dead
+  still, trails and all. Resizing the window or switching palette restarts
+  them, which is deliberate. Then watch them at the throttle's frame rate:
+  `python main.py --pattern fire --fps 2` (and `life`). Fire should look
+  slower and still burn; Life keeps its full speed and just jumps five
+  generations a frame. For the real thing, `python main.py --screensaver
+  --full-minutes 0 --cycle-patterns fire,life` starts already throttled (any
+  key exits). Braille fire at 2 fps takes most of a 20 s slot to climb the
+  screen. That's expected; say if it bothers you.
 - `1` `2` `3` switch palettes. **Braille (`3`) is the one to watch**: Windows'
   Consolas has no braille glyphs, so if DejaVu Sans Mono isn't installed you
   should get a toast saying so rather than a screen of empty boxes. Either
-  outcome is worth recording.
+  outcome is worth recording. *Found 2026-10-26: on this laptop DejaVu Sans
+  Mono **is** installed but its copy has no braille glyphs, and the check is
+  fooled — expect empty boxes and no toast. That's the bug under "Found in
+  passing" below, not a new one.*
 - `C` colour, `+`/`-` density, `[`/`]` resolution, `Tab` image mode, `N`/`P`
   through `images/`, `S` saves a PNG to `captures/`.
 - HUD should fade after 15 s of no input and relight the instant you touch
@@ -124,6 +142,21 @@ reads first. Rough notes are fine; no need to diagnose it.
       gets one at the end of R2.
 - [x] `Claude.md` showed as modified (line endings only). Resolved by
       2026-10-26: `core.autocrlf` is `true` now and git sees it clean.
+
+## Found in passing — for a session
+
+- [ ] **Braille shows empty boxes on this laptop, with no toast** (found
+      2026-10-26 during R2b's headless checks). `C:\Windows\Fonts\DejaVuSansMono.ttf`
+      is installed, but its copy has no braille glyphs: every braille codepoint
+      draws the same missing-glyph box (identical ink to a private-use
+      character). `renderer._has_braille` asks `font.metrics()`, which answers
+      for the missing-glyph box too, so the mono font passes and the "install
+      DejaVu" toast never fires. DejaVu Sans (`DejaVuSans.ttf`, already in the
+      candidate list) and Segoe UI Symbol both draw braille properly. Likely
+      fix: test by rendering, e.g. require `⣿` and `⠁` to come out with
+      different ink, so the search falls through to a font that has them. Small
+      and self-contained; it touches every braille frame, so check alignment in
+      a headless render afterwards. New code, so it rides the end-of-R2 rebuild.
 
 ---
 
@@ -203,7 +236,7 @@ for settings, ever.
 
 ## R2 — More generative patterns & the slideshow ⏳ scoped 2026-08-05
 
-Planned with Matthew 2026-08-05; nothing built yet. Verdict on the candidate
+Planned with Matthew 2026-08-05; R2a and R2b built since. Verdict on the candidate
 list: **all of them** — fire, rain, lava lamp, Life, tunnel, galaxy, fireflies,
 Mandelbrot zoom, and (promoted 2026-08-10) the *Electric !* homage
 (5 → 14 patterns) — plus the **image slideshow, unparked** from
@@ -257,7 +290,19 @@ Verify: shape/range/NaN tests per pattern, headless renders at several `t`
 eyeballed in all three palettes. `cycle_patterns` / `--pattern` validation
 picks the new names up from `PATTERNS` automatically.
 
-### R2b — the stateful pair
+### R2b — the stateful pair ✅ shipped 2026-10-26
+
+Built as planned below. `patterns.Simulation` is the base both share: fixed
+ticks counted from `t`, at most 6 a frame with the excess dropped, not owed;
+state keyed by shape; RNG reseeded on each fresh start. `GenerativeField`
+resets sims on `set_dims` and when switching *to* one, and gives each field its
+own copy. The eleven older patterns are untouched. Fire departs from Doom in
+one way: drifting hot and cool coals instead of a uniform white-hot row, so the
+flames surge in places rather than standing as a wall. Colour overrides live in
+`app._GEN_GRADIENTS` (dots and ramp only: braille generative has always been
+single-colour, which R3's themes can take up). Tuning and timings are in
+WORKLOG 2026-10-26; tests are `tests/test_stateful.py` plus the contract
+checks in `tests/test_patterns.py` (87 in total). Original plan:
 
 Doom fire + Conway's Life with soft decay trails, plus the contract they need:
 

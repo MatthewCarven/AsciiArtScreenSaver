@@ -9,11 +9,16 @@ its random ``phase`` array and span). It returns a brightness field in roughly
 Add a new pattern by writing a function with this signature and appending it to
 ``PATTERNS`` — it then becomes selectable at runtime (the G key).
 
-Every pattern here is a *pure* function of ``(X, Y, t)`` — no memory between
+Most patterns here are *pure* functions of ``(X, Y, t)`` — no memory between
 frames — which is what makes pause free and the screensaver's throttle phase
 harmless. The R2a batch (rain, lava, tunnel, galaxy, fireflies, electric) keeps
 that contract by deriving all per-entity state (drop speeds, blob orbits,
 charge paths) from integer hashes and closed-form orbits instead of simulation.
+
+The exceptions are R2b's fire and life, which really are simulations. A
+``PATTERNS`` entry may therefore also be a callable object with a ``reset()``
+method; :class:`Simulation` is the base they share, and it keeps the two
+promises above — pause freezes it, and the throttle only slows it down.
 """
 
 from __future__ import annotations
@@ -284,8 +289,169 @@ def electric(X, Y, t, gf):
     return bands * (0.30 + 0.70 * np.tanh(np.abs(V) * 1.1))
 
 
+# --------------------------------------------------------------------------- #
+# R2b — the stateful pair (simulations with memory between frames)
+# --------------------------------------------------------------------------- #
+
+class Simulation:
+    """Base for patterns that remember things between frames.
+
+    :class:`GenerativeField` calls ``reset()`` whenever the grid is resized
+    and whenever the pattern is switched to. State is also keyed by the
+    field's shape, so a palette switch — which changes the sub-resolution
+    without resizing anything — starts afresh too.
+
+    The sim advances in fixed ticks of ``1 / rate`` seconds, and how many
+    ticks are due is worked out from ``t`` alone, so pause (which freezes
+    ``t``) freezes the sim for free. At most ``MAX_STEPS`` ticks run in one
+    frame, and any beyond that are dropped rather than owed: at the
+    screensaver's 2 fps throttle the sim runs proportionally slower instead of
+    stalling or snowballing. The RNG is reseeded on every fresh start, so the
+    same timestamps always give the same frames.
+
+    Subclasses provide ``start(h, w, gf)``, ``step(stamp, gf)`` (one tick,
+    ``stamp`` being the time it happened) and ``draw(t, gf)``.
+    """
+
+    MAX_STEPS = 6
+    RATE = 10.0                     # ticks per second
+
+    def __init__(self, seed: int):
+        self.seed = seed
+        self.reset()
+
+    def reset(self):
+        self.shape = None           # nothing until the next frame starts it
+        self.steps = 0
+
+    def rate(self, h, gf) -> float:
+        return self.RATE
+
+    def __call__(self, X, Y, t, gf):
+        h, w = X.shape
+        if self.shape != (h, w) or t < self._sim_t:
+            self.reset()
+            self.shape = (h, w)
+            self._sim_t = t
+            self._rng = np.random.default_rng(self.seed)
+            self.start(h, w, gf)
+        tick = 1.0 / self.rate(h, gf)
+        due = int((t - self._sim_t) / tick)
+        if due > self.MAX_STEPS:
+            # Behind (throttled, or back from image mode): run the last few
+            # ticks and let the rest go.
+            stamps = [t - tick * k for k in range(self.MAX_STEPS - 1, -1, -1)]
+            self._sim_t = t
+        else:
+            stamps = [self._sim_t + tick * (k + 1) for k in range(due)]
+            self._sim_t += tick * due
+        for stamp in stamps:
+            self.steps += 1
+            self.step(stamp, gf)
+        return self.draw(t, gf)
+
+
+class Fire(Simulation):
+    """Doom fire — the PSX Doom title-screen effect (1995), as Fabien Sanglard
+    wrote it up.
+
+    A hot bottom row feeds it. Every tick each cell takes the heat of the cell
+    below it, read from a random neighbour (the lick and lean of the flames,
+    with Doom's slight leftward wind), minus a random cooling. The cooling is
+    scaled to the field so flames reach about the same share of the screen at
+    any size, and the tick rate scales with sub-resolution so they rise at the
+    same on-screen speed in braille too. One departure from Doom: its coals
+    are uniformly white-hot, which stands the fire up as an even wall, so here
+    hotter and cooler stretches drift along the bottom row and the flames
+    surge and slump in places.
+    """
+
+    RATE = 30.0                     # ticks per second at cell resolution
+    REACH = 0.70                    # where unit heat runs out, as a share of height
+
+    def rate(self, h, gf) -> float:
+        return self.RATE * max(1.0, h / gf.rows)
+
+    def start(self, h, w, gf):
+        self.heat = np.zeros((h, w), dtype=np.float32)
+        self._cols = np.arange(w)
+        self._u = (self._cols * (2.0 * np.pi / w)).astype(np.float32)
+        # Half the ticks cool by this much, so heat runs out REACH * h up.
+        self._cool = np.float32(2.0 / (self.REACH * h))
+        self._stoke(self._sim_t, gf)
+
+    def _stoke(self, stamp, gf):
+        """The coals: two slow waves beating against each other along the
+        bottom row. Peaks run past 1.0 for a white-hot core; the field is
+        clipped later."""
+        p = gf.phase
+        self.heat[-1] = 0.90 + 0.25 * (np.sin(self._u * 5.0 + stamp * 0.9 + p[0])
+                                       * np.sin(self._u * 9.0 - stamp * 0.6 + p[1]))
+
+    def step(self, stamp, gf):
+        self._stoke(stamp, gf)
+        h, w = self.heat.shape
+        if h < 2:
+            return
+        r = self._rng.integers(0, 4, size=(h - 1, w), dtype=np.int8)
+        src = (self._cols + r - 1) % w
+        below = np.take_along_axis(self.heat[1:], src, axis=1)
+        self.heat[:-1] = np.maximum(below - (r & 1) * self._cool, 0.0)
+
+    def draw(self, t, gf):
+        # Lift any heat above the density crush, so the ragged tips — the
+        # flicker is all up there — fade to the threshold instead of hiding.
+        return np.where(self.heat > 0.0, 0.42 + 0.58 * self.heat, 0.0)
+
+
+def life_step(alive):
+    """One generation of Conway's Life (B3/S23) on a torus."""
+    a = alive.astype(np.uint8)
+    v = a + np.roll(a, 1, axis=0) + np.roll(a, -1, axis=0)
+    n = v + np.roll(v, 1, axis=1) + np.roll(v, -1, axis=1) - a
+    return (n == 3) | (alive & (n == 2))
+
+
+class Life(Simulation):
+    """Conway's Life with soft decay trails.
+
+    Live cells are full brightness; a cell that dies glows on and fades, which
+    turns gliders into comets and oscillators into soft pulses. The fade runs
+    on ``t``, not on generations, so it stays smooth at 60 fps even though the
+    board only changes ten times a second. Left alone, Life settles into still
+    lifes and blinkers within a few thousand generations, so every few seconds
+    a patch of fresh soup lands somewhere and stirs it up again.
+    """
+
+    RATE = 10.0                     # generations per second
+    FILL = 0.30                     # share of cells alive in fresh soup
+    TRAIL = 1.4                     # seconds for a dead cell's glow to fall by 1/e
+    SPLASH_EVERY = 40               # generations between fresh-soup patches
+
+    def start(self, h, w, gf):
+        self.alive = self._rng.random((h, w)) < self.FILL
+        self.seen = np.full((h, w), -np.inf)     # when each cell was last alive
+
+    def step(self, stamp, gf):
+        self.alive = life_step(self.alive)
+        if self.steps % self.SPLASH_EVERY == 0:
+            h, w = self.alive.shape
+            ph, pw = max(3, h // 5), max(3, w // 6)
+            y = int(self._rng.integers(0, max(1, h - ph + 1)))
+            x = int(self._rng.integers(0, max(1, w - pw + 1)))
+            patch = self.alive[y:y + ph, x:x + pw]
+            patch |= self._rng.random(patch.shape) < self.FILL
+        self.seen[self.alive] = stamp
+
+    def draw(self, t, gf):
+        glow = 0.85 * np.exp((self.seen - t) / self.TRAIL)
+        return np.where(self.alive, 1.0, glow).astype(np.float32)
+
+
 # Order defines the cycle order of the G key. dotfield stays first (default);
-# the R2a batch follows the originals, electric as the finale.
+# the R2a batch follows the originals with electric as its finale, then R2b's
+# stateful pair. Stateful entries are prototypes: each GenerativeField runs its
+# own copy.
 PATTERNS = [
     ("dotfield", dotfield),
     ("plasma", plasma),
@@ -298,4 +464,6 @@ PATTERNS = [
     ("galaxy", galaxy),
     ("fireflies", fireflies),
     ("electric", electric),
+    ("fire", Fire(seed=1993)),
+    ("life", Life(seed=1970)),
 ]

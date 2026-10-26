@@ -6,13 +6,24 @@ grid) and produces a brightness field by delegating to one of the functions in
 (cell-widths) so they look identical regardless of palette sub-resolution, and a
 shared ``density`` control sparsifies the result into the soft mosaic of dots
 that inspired this project.
+
+A pattern with a ``reset()`` method (R2b's simulations) has memory, so it is
+reset whenever the grid changes size and whenever it is switched to.
 """
 
 from __future__ import annotations
 
+import copy
+
 import numpy as np
 
 from . import patterns
+
+
+def _reset(fn):
+    reset = getattr(fn, "reset", None)
+    if reset is not None:
+        reset()
 
 
 class GenerativeField:
@@ -21,7 +32,9 @@ class GenerativeField:
         self.density = float(density)
         rng = np.random.default_rng(seed)
         self.phase = rng.uniform(0, 2 * np.pi, size=8).astype(np.float32)
-        self.patterns = patterns.PATTERNS
+        # Stateful patterns get a private copy, so two fields never share a sim.
+        self.patterns = [(n, copy.copy(fn) if hasattr(fn, "reset") else fn)
+                         for n, fn in patterns.PATTERNS]
         self.pattern_index = 0
         self.set_dims(cols, rows, cell_aspect)
 
@@ -31,15 +44,20 @@ class GenerativeField:
         return self.patterns[self.pattern_index][0]
 
     def next_pattern(self, step: int = 1) -> str:
-        self.pattern_index = (self.pattern_index + step) % len(self.patterns)
+        self._select((self.pattern_index + step) % len(self.patterns))
         return self.pattern_name
 
     def set_pattern(self, name: str) -> bool:
         for i, (n, _) in enumerate(self.patterns):
             if n == name:
-                self.pattern_index = i
+                self._select(i)
                 return True
         return False
+
+    def _select(self, i: int):
+        if i != self.pattern_index:
+            self.pattern_index = i
+            _reset(self.patterns[i][1])     # a sim starts afresh when chosen
 
     # -- geometry ---------------------------------------------------------- #
     def set_dims(self, cols: int, rows: int, cell_aspect: float):
@@ -49,6 +67,8 @@ class GenerativeField:
         self.width_span = float(self.cols)
         self.height_span = float(self.rows) * cell_aspect
         self._coords: dict[tuple[int, int], tuple[np.ndarray, np.ndarray]] = {}
+        for _, fn in self.patterns:         # a resize means a clean start
+            _reset(fn)
 
     def _grid(self, h: int, w: int):
         c = self._coords.get((h, w))

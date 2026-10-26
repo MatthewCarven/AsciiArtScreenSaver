@@ -31,6 +31,14 @@ _HUD_FADE_SECONDS = 1.0
 # Generative colour gradient (dark -> bright), used only when colour is on.
 _GEN_LOW = np.array([36, 54, 110], dtype=np.float32)
 _GEN_HIGH = np.array([196, 214, 255], dtype=np.float32)
+# Per-pattern (low, high) overrides of that gradient. Deliberately minimal:
+# R3's colour themes will absorb and generalise this.
+_GEN_GRADIENTS = {
+    "fire": (np.array([120, 22, 4], dtype=np.float32),       # ember
+             np.array([255, 200, 90], dtype=np.float32)),
+    "life": (np.array([14, 72, 30], dtype=np.float32),       # phosphor green
+             np.array([150, 255, 160], dtype=np.float32)),
+}
 
 
 def _set_display_awake(enabled):
@@ -231,7 +239,9 @@ class App:
             ramp = palettes.ramp_string(self.palette)
             rows, grid = field_to_ramp(field, ramp)
             if self.color:
-                cg = (_GEN_LOW + (_GEN_HIGH - _GEN_LOW) * field[..., None])
+                low, high = _GEN_GRADIENTS.get(self.gen.pattern_name,
+                                               (_GEN_LOW, _GEN_HIGH))
+                cg = (low + (high - low) * field[..., None])
                 cg = cg.astype(np.uint8)
                 self.renderer.blit_grid_color(self.screen, grid, cg)
             else:
