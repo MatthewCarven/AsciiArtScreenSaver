@@ -170,6 +170,32 @@ def test_pattern_must_be_a_real_pattern():
     assert config.validate({"pattern": "wobble"})[0] == {}
 
 
+def test_cycle_content_is_one_of_three():
+    for good in ("patterns", "images", "mixed"):
+        assert config.validate({"cycle_content": good}) == ({"cycle_content": good}, [])
+    for bad in ("slideshow", "Mixed", "", 1, True, None, ["images"]):
+        values, problems = config.validate({"cycle_content": bad})
+        assert values == {}, bad
+        assert len(problems) == 1 and problems[0].startswith("cycle_content:"), bad
+
+
+def test_images_dir_is_a_path_or_null():
+    assert config.validate({"images_dir": "C:/Pictures/Saver"})[0] == \
+        {"images_dir": "C:/Pictures/Saver"}
+    assert config.validate({"images_dir": None}) == ({"images_dir": None}, [])
+    for bad in (5, True, ["C:/a", "C:/b"], {"path": "x"}):
+        values, problems = config.validate({"images_dir": bad})
+        assert values == {}, bad
+        assert len(problems) == 1 and problems[0].startswith("images_dir:"), bad
+
+
+def test_a_missing_images_dir_is_not_a_config_problem():
+    # The folder may be a drive that isn't plugged in yet; the app rescans.
+    with sandbox() as d:
+        values, problems = config.validate({"images_dir": str(d / "not-yet")})
+        assert problems == [] and values["images_dir"] == str(d / "not-yet")
+
+
 # --------------------------------------------------------------------------- #
 # Precedence: defaults < config file < command line
 # --------------------------------------------------------------------------- #
@@ -192,6 +218,26 @@ def test_cli_can_switch_a_boolean_back_off():
     assert parse([], {"color": True}).color is True
     assert parse(["--no-color"], {"color": True}).color is False
     assert parse(["--color"], {"color": False}).color is True
+
+
+def test_slideshow_settings_follow_the_same_precedence():
+    assert parse([], {}).cycle_content == "mixed"
+    assert parse([], {}).images_dir is None
+    assert parse([], {"cycle_content": "images"}).cycle_content == "images"
+    assert parse(["--cycle-content", "patterns"],
+                 {"cycle_content": "images"}).cycle_content == "patterns"
+    assert parse(["--images-dir", "C:/mine"],
+                 {"images_dir": "C:/theirs"}).images_dir == "C:/mine"
+
+
+def test_the_command_line_refuses_an_unknown_cycle_content():
+    try:
+        with open(os.devnull, "w") as quiet, patched(sys, "stderr", quiet):
+            parse(["--cycle-content", "slideshow"], {})
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:
+        raise AssertionError("argparse should have refused it")
 
 
 def test_parser_defaults_come_from_the_config_module():
@@ -222,6 +268,15 @@ def test_written_config_carries_the_command_line_settings():
                   "--write-config", str(target)])
         values, _, _ = config.load(str(target))
         assert values["idle_fps"] == 11 and values["palette"] == "braille"
+
+
+def test_starter_file_carries_and_explains_the_slideshow_settings():
+    body = json.loads(config.dump_template())
+    assert body["cycle_content"] == "mixed" and body["images_dir"] is None
+    help_text = "\n".join(body["_help"])
+    assert "cycle_content" in help_text and "images_dir" in help_text
+    for kind in config.CYCLE_CONTENT:
+        assert f'"{kind}"' in help_text, kind
 
 
 def test_write_config_to_an_impossible_path_reports_and_exits_nonzero():

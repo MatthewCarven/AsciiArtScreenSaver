@@ -69,12 +69,19 @@ class App:
 
         # The project folder from source; beside the .exe / .scr when built.
         self.project_dir = config.data_dir()
-        self.images_dir = self.project_dir / "images"
         self.captures_dir = self.project_dir / "captures"
-        try:
-            self.images_dir.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            pass                # no images then; never a reason not to start
+        # images_dir points the image source at a folder of your own. That
+        # folder is only ever read: not created, and no sample written into it.
+        named = getattr(opts, "images_dir", None)
+        self.own_images_dir = not named
+        if named:
+            self.images_dir = Path(os.path.expandvars(os.path.expanduser(named)))
+        else:
+            self.images_dir = self.project_dir / "images"
+            try:
+                self.images_dir.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                pass            # no images then; never a reason not to start
 
         self.opts = opts
         self.windowed_size = (opts.width, opts.height)
@@ -106,20 +113,16 @@ class App:
             self.gen.set_pattern(start_pattern)
 
         # Image state.
-        self.images = self._scan_images()
-        if not self.images:
+        self._start_image = Path(opts.image) if opts.image else None
+        self._rescan_images()
+        if not self.images and self.own_images_dir:
             sample = self.images_dir / "sample_rings.png"
             try:
                 make_sample_image(str(sample))
             except OSError:
                 pass
-            self.images = self._scan_images()
+            self._rescan_images()
         self.image_index = 0
-        if opts.image:
-            p = Path(opts.image)
-            if p.exists():
-                self.images.insert(0, p)
-                self.image_index = 0
 
         self._img_cache = None      # dict from load_image_fields
         self._img_key = None        # cache key for the rendered surface
@@ -145,16 +148,24 @@ class App:
         self.screensaver = bool(getattr(opts, "screensaver", False))
         self.keep_awake = bool(getattr(opts, "keep_display_awake", False))
         self.ss_cycle_seconds = float(getattr(opts, "cycle_seconds", 20.0))
+        self.cycle_content = getattr(opts, "cycle_content", "mixed")
         self.ss_idle_fps = max(1, int(getattr(opts, "idle_fps", 2)))
         self._ss_full = float(getattr(opts, "full_minutes", 5.0)) * 60.0
         self._ss_throttle = float(getattr(opts, "throttle_minutes", 5.0)) * 60.0
         self._ss_cycle_t = 0.0
+        # The slideshow's place in self.images: the next one it will show.
+        self._ss_image_pos = self.image_index + 1 if self.mode == "image" else 0
         self._ss_mouse = None
         if self.screensaver:
             self.show_hud = False
             pygame.mouse.set_visible(False)
             if not self.fullscreen:
                 self._toggle_fullscreen()
+            if self.cycle_content == "images" and self.mode == "generative":
+                self._ss_next_image()   # a slideshow opens on a picture, if any
+
+        if not self.own_images_dir and not self.images_dir.is_dir():
+            self._toast(f"images_dir: no such folder: {self.images_dir}", seconds=6.0)
 
         # Where settings came from, and anything wrong with them. Surfaced in
         # the HUD because the screensaver has no console to print to.
@@ -168,12 +179,23 @@ class App:
     # Setup helpers
     # ------------------------------------------------------------------ #
     def _scan_images(self):
-        if not self.images_dir.is_dir():
-            return []
-        return sorted(
-            p for p in self.images_dir.iterdir()
-            if p.is_file() and p.suffix.lower() in _IMAGE_EXTS
-        )
+        try:
+            if not self.images_dir.is_dir():
+                return []
+            return sorted(
+                p for p in self.images_dir.iterdir()
+                if p.is_file() and p.suffix.lower() in _IMAGE_EXTS
+            )
+        except OSError:
+            return []           # a share or drive that's gone away: no images
+
+    def _rescan_images(self):
+        """Re-read the folder, so files dropped in since join and deleted
+        ones leave. ``--image`` stays at the front while it exists."""
+        images = self._scan_images()
+        if self._start_image is not None and self._start_image.exists():
+            images.insert(0, self._start_image)
+        self.images = images
 
     def _recompute_grid(self):
         w, h = self.screen.get_size()
@@ -201,14 +223,21 @@ class App:
             return False
         want = (str(path), self.palette, self.cols, self.rows)
         if self._img_cache is not None and self._img_cache.get("_want") == want:
-            return True
+            return not self._img_cache.get("_failed")
         braille = palettes.is_braille(self.palette)
-        data = load_image_fields(str(path), self.cols, self.rows,
-                                 self.renderer.cell_aspect, braille)
+        try:
+            data = load_image_fields(str(path), self.cols, self.rows,
+                                     self.renderer.cell_aspect, braille)
+        except Exception as exc:
+            # Corrupt, deleted, or still being copied into a watched folder.
+            # Remember the failure, so it isn't retried every frame, and let
+            # the caller draw a pattern: never a crash, never a black screen.
+            data = {"_failed": True}
+            self._toast(f"couldn't load {path.name}: {exc}", seconds=6.0)
         data["_want"] = want
         self._img_cache = data
         self._img_key = None  # invalidate rendered surface
-        return True
+        return not data.get("_failed")
 
     def _begin_reveal(self):
         self._reveal_start = self.t
@@ -426,6 +455,61 @@ class App:
         self.gen.set_pattern(name)
         return name
 
+    def _ss_cycle(self):
+        """Move the screensaver on once the current pattern or image has had
+        its ``cycle_seconds``.
+
+        ``cycle_content`` says what comes next: "patterns" rotates patterns
+        only (and an image you started on stays put, as it always has),
+        "images" is a slideshow, and "mixed" alternates the two: a pattern, an
+        image, the next pattern, the next image. With no image to show, the
+        last two fall back to patterns, so the screen is never left black.
+        """
+        if not self.screensaver or self.t - self._ss_cycle_t < self.ss_cycle_seconds:
+            return
+        if self.mode == "generative" or (
+                self.mode == "image" and self.cycle_content != "patterns"):
+            self._ss_cycle_t = self.t
+            if self.cycle_content == "images" or (
+                    self.cycle_content == "mixed" and self.mode == "generative"):
+                if self._ss_next_image():
+                    return
+            self._ss_next_pattern()
+
+    def _ss_next_pattern(self):
+        from_image = self.mode == "image"
+        self.mode = "generative"
+        before = self.gen.pattern_index
+        self._advance_pattern()
+        if from_image and self.gen.pattern_index == before:
+            # Back onto the same pattern after an image (a one-pattern
+            # rotation): a sim starts afresh, as it does when switched to.
+            self.gen.restart()
+
+    def _ss_next_image(self):
+        """Show the slideshow's next image, entering with the dissolve reveal.
+        False if there's none to show.
+
+        At the end of each lap, and while there are no images at all, the
+        folder is rescanned: pictures dropped in while the saver runs join the
+        next lap. One that won't load (say, still being copied) is skipped.
+        """
+        on_screen = self._current_image_path() if self.mode == "image" else None
+        if self._ss_image_pos >= len(self.images):
+            self._rescan_images()
+            self._ss_image_pos = 0
+        if self._img_cache is not None and self._img_cache.get("_failed"):
+            self._img_cache = None          # a lap on, give it another go
+        while self._ss_image_pos < len(self.images):
+            self.image_index = self._ss_image_pos
+            self._ss_image_pos += 1
+            if self._ensure_image_loaded():
+                self.mode = "image"
+                if self._current_image_path() != on_screen:
+                    self._begin_reveal()    # a lone image isn't re-dissolved
+                return True
+        return False
+
     def _change_font(self, delta):
         self.renderer.set_font_size(self.renderer.font_size + delta)
         self._recompute_grid()
@@ -547,10 +631,7 @@ class App:
                 self.t += dt
             if self._ss_finished():
                 running = False
-            if self.screensaver and self.mode == "generative" \
-                    and self.t - self._ss_cycle_t >= self.ss_cycle_seconds:
-                self._ss_cycle_t = self.t
-                self._advance_pattern()
+            self._ss_cycle()
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -610,6 +691,9 @@ def build_parser():
 
     p.add_argument("--image", default=D["image"],
                    help="path to an image to load on startup (switches to image mode)")
+    p.add_argument("--images-dir", default=D["images_dir"], dest="images_dir", metavar="FOLDER",
+                   help="folder of images for N/P and the screensaver's slideshow "
+                        "(default: the app's own images/)")
     p.add_argument("--video", default=D["video"],
                    help="path to a video file to play as ASCII (switches to video mode)")
     p.add_argument("--webcam", type=int, nargs="?", const=0, default=D["webcam"],
@@ -625,9 +709,14 @@ def build_parser():
     p.add_argument("--density", type=float, default=D["density"],
                    help="generative dot density, 0.05–1.0")
     p.add_argument("--screensaver", action=flag, default=D["screensaver"],
-                   help="fullscreen screensaver: hide cursor, auto-cycle patterns, exit on any input")
+                   help="fullscreen screensaver: hide cursor, auto-cycle patterns and images, "
+                        "exit on any input")
     p.add_argument("--cycle-seconds", type=float, default=D["cycle_seconds"], dest="cycle_seconds",
-                   help="seconds between automatic pattern changes in screensaver mode")
+                   help="screensaver: seconds each pattern or image is shown")
+    p.add_argument("--cycle-content", choices=config.CYCLE_CONTENT, default=D["cycle_content"],
+                   dest="cycle_content",
+                   help="screensaver: what it rotates. mixed (the default) alternates a "
+                        "pattern and an image; with no images, patterns only")
     p.add_argument("--cycle-patterns", default=D["cycle_patterns"], dest="cycle_patterns",
                    type=lambda s: [x.strip() for x in s.split(",") if x.strip()] or None,
                    help="comma-separated patterns the screensaver rotates (default: all)")

@@ -8,7 +8,8 @@ shared ``density`` control sparsifies the result into the soft mosaic of dots
 that inspired this project.
 
 A pattern with a ``reset()`` method (R2b's simulations) has memory, so it is
-reset whenever the grid changes size and whenever it is switched to.
+reset whenever the grid changes size and whenever it is switched to (the
+screensaver's slideshow also restarts it when it comes back after an image).
 """
 
 from __future__ import annotations
@@ -53,6 +54,10 @@ class GenerativeField:
                 self._select(i)
                 return True
         return False
+
+    def restart(self):
+        """Start the current pattern afresh, as if it had just been chosen."""
+        _reset(self.patterns[self.pattern_index][1])
 
     def _select(self, i: int):
         if i != self.pattern_index:

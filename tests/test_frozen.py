@@ -82,6 +82,26 @@ def test_a_failed_capture_is_reported_not_raised():
         assert app.toast_text.startswith("couldn't save")
 
 
+def test_frozen_images_come_from_beside_the_program_unless_a_folder_is_named():
+    with sandbox() as d:
+        exe = d / "app" / "ASCIIVisualizer.exe"
+        exe.parent.mkdir()
+        mine = d / "mine"
+        mine.mkdir()
+        with frozen_at(exe):
+            own = App(build_parser().parse_args([]))
+            named = App(build_parser().parse_args(["--images-dir", str(mine)]))
+        here = exe.parent.resolve()
+        # Unset: as before, images/ beside the program, given the sample.
+        assert own.images_dir == here / "images"
+        assert [p.name for p in own.images] == ["sample_rings.png"]
+        # Named: read from there, and nothing written into it. Captures stay
+        # beside the program either way.
+        assert named.images_dir == mine and named.images == []
+        assert list(mine.iterdir()) == []
+        assert named.captures_dir == own.captures_dir == here / "captures"
+
+
 def test_frozen_app_still_starts_when_nowhere_is_writable():
     # The screensaver must never fail to appear over a folder it can't write.
     with sandbox() as d:

@@ -45,10 +45,11 @@ python main.py --list-patterns           # see what the pattern names are
 python main.py --write-config            # save your current settings for next time
 ```
 
-All options: `--image`, `--video`, `--webcam [INDEX]`, `--mode
-{generative,image,video}`, `--palette {dots,ramp,braille}`, `--pattern NAME`,
-`--color` / `--no-color`, `--font-size`, `--density`, `--fps`, `--width`,
-`--height`, `--config PATH`. See `python main.py --help`.
+All options: `--image`, `--images-dir FOLDER`, `--video`, `--webcam [INDEX]`,
+`--mode {generative,image,video}`, `--palette {dots,ramp,braille}`, `--pattern
+NAME`, `--color` / `--no-color`, `--font-size`, `--density`, `--fps`, `--width`,
+`--height`, `--config PATH`, plus the screensaver's own (see [Settings
+file](#settings-file)). See `python main.py --help`.
 
 ## Controls
 
@@ -80,6 +81,12 @@ aspect (character cells are taller than they are wide, so this is corrected for
 you) and resolve in with a brief dissolve. For the cleanest photo conversions,
 try the **braille** palette (it packs 8 sub-dots per cell, the highest detail)
 or the **ramp** palette with `--color`.
+
+To use a folder of your own instead, such as a pictures folder, point
+`images_dir` at it in the [settings file](#settings-file) (or pass
+`--images-dir FOLDER`). The app only reads that folder: it never creates it or
+writes the sample image into it. The screensaver shows these images too,
+between its patterns (see `cycle_content`).
 
 ## Video & webcam
 
@@ -119,7 +126,9 @@ Keys are the long option names with dashes turned into underscores, so
   "pattern": "plasma",
   "color": true,
   "density": 0.7,
+  "cycle_content": "mixed",
   "cycle_patterns": ["dotfield", "plasma", "ripples"],
+  "images_dir": "C:/Users/you/Pictures/Saver",
   "full_minutes": 5,
   "throttle_minutes": -1,
   "idle_fps": 2
@@ -130,6 +139,23 @@ Precedence is **defaults → config file → command line**, so a flag you type
 always wins for that one run. `cycle_patterns` limits which patterns the
 screensaver rotates through (omit it to cycle all of them), and a negative
 `throttle_minutes` means "stay in the quiet phase and never exit".
+
+**What the screensaver rotates** is `cycle_content`, and each pattern or image
+stays up for `cycle_seconds` (default 20):
+
+- `"mixed"` (the default): a pattern, then an image, then the next pattern,
+  then the next image, and so on. Images come in with the dissolve.
+- `"images"`: a slideshow of your pictures only.
+- `"patterns"`: patterns only, as before R2c.
+
+The images come from `images_dir`, or from the app's own `images/` folder when
+that's unset. The folder is read again at the end of each lap through it, so
+pictures you drop in while the saver runs join the next lap without a restart.
+If it's empty, missing, or nothing in it will load, the saver shows patterns
+instead, so you never get a black screen. Give `images_dir` as a full path.
+Forward slashes save you escaping (in JSON a backslash must be written `\\`),
+and `~` or `%USERPROFILE%` work too. The keyboard is unchanged: `Tab`, `N`/`P`
+and `G` behave the same in the windowed app.
 
 Nothing here can stop the app starting: a missing file means defaults, an
 unparseable one means defaults, and a single bad value falls back to its default
@@ -171,9 +197,10 @@ Both read the same `config.json` (see above), and both keep `images/` and
 Right-click `ASCIIVisualizer.scr` in Explorer and choose **Install** to
 preview and set it, or copy it into `C:\Windows\System32` so it shows up in
 Settings → Lock screen → Screen saver. (From `System32` it can't write beside
-itself, so its `images/` folder moves to `%APPDATA%\ASCIIVisualizer`.) It runs
-fullscreen, hides the cursor, auto-cycles through the generative patterns, and
-quits on any key or real mouse movement.
+itself, so its `images/` folder moves to `%APPDATA%\ASCIIVisualizer`; or set
+`images_dir` to a folder of your own.) It runs fullscreen, hides the cursor,
+rotates through the generative patterns with your images in between (see
+`cycle_content` above), and quits on any key or real mouse movement.
 
 To stay quiet when you're away it winds down in phases: full speed for
 `--full-minutes` (default 5), then it throttles to `--idle-fps` (default 2) for
