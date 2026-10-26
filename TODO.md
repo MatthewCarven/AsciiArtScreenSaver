@@ -13,7 +13,8 @@ as well as the `.scr`; both smoke-tested 2026-10-26. **R2b shipped
 2026-10-26** — fire and Life, the first stateful patterns; 13 patterns now
 (not in the builds yet: that rebuild waits for the end of R2). **Braille font
 check fixed 2026-10-26** (it was passing a font whose braille is a box; also
-waits for that rebuild). R2c–R2d and R3–R4 not started.
+waits for that rebuild). **R2d shipped 2026-10-26** — the Mandelbrot zoom, 14
+patterns now (also waits for that rebuild). R2c and R3–R4 not started.
 
 ---
 
@@ -35,8 +36,8 @@ Double-click it: it builds both `ASCIIVisualizer.exe` (the app) and
 builds just one). Right-click the new `.scr` → **Install**. This is the last
 rebuild you should need for a settings change. *Both are already built (the
 `.exe` on 2026-10-26, the `.scr` on 2026-10-15), so you can go straight to
-Install — but they predate R2b, so fire and Life are only in `python main.py`
-until the one rebuild at the end of R2.* Every other step below works with
+Install — but they predate R2b, so fire, Life and the Mandelbrot zoom are only
+in `python main.py` until the one rebuild at the end of R2.* Every other step below works with
 `ASCIIVisualizer.exe` in place of `python main.py`, and it's worth trying both
 at least once.
 
@@ -46,12 +47,21 @@ at least once.
 python main.py
 ```
 
-- `G` cycles patterns — now all 13: the original five plus rain, lava, tunnel,
+- `G` cycles patterns — now all 14: the original five plus rain, lava, tunnel,
   galaxy, fireflies, electric (R2a, 2026-08-11), then fire and Life (R2b,
-  2026-10-26). Worth a slow lap in each palette: electric's flowing bands and
-  the tunnel are the showpieces, braille makes both spectacular, and
-  fireflies is deliberately the calm one. This is windowed `python main.py` —
-  no rebuild needed to see any of it.
+  2026-10-26), then the Mandelbrot zoom (R2d, 2026-10-26). Worth a slow lap in
+  each palette: electric's flowing bands and the tunnel are the showpieces,
+  braille makes both spectacular, and fireflies is deliberately the calm one.
+  This is windowed `python main.py` — no rebuild needed to see any of it.
+- **The Mandelbrot zoom** (R2d): `python main.py --pattern mandelbrot`. Each
+  dive takes 80 s, from the whole set down a trillion-fold into the boundary,
+  then fades to black and starts on the next of five targets (Seahorse Valley,
+  the triple-spiral valley, Elephant Valley, the point i, the antenna). Ramp
+  (`2`) is the classic text-mode look. Worth one whole dive and a reset.
+  Questions: is 80 s a dive the right pace, does it shimmer too much near the
+  set in motion, and what does the HUD's fps say full-screen in braille? Its
+  pattern costs less there than electric or Life, but nothing here measured a
+  real screen. `--fps 2` shows the throttle: a 20% zoom step each frame.
 - **Fire and Life at 60 fps and at the 2 fps throttle** (R2b). They're the
   first patterns with memory, so the questions are new: press `C` for colour
   (fire is ember-orange, Life phosphor-green). `Space` should freeze both dead
@@ -242,7 +252,7 @@ for settings, ever.
 
 ## R2 — More generative patterns & the slideshow ⏳ scoped 2026-08-05
 
-Planned with Matthew 2026-08-05; R2a and R2b built since. Verdict on the candidate
+Planned with Matthew 2026-08-05; R2a, R2b and R2d built since. Verdict on the candidate
 list: **all of them** — fire, rain, lava lamp, Life, tunnel, galaxy, fireflies,
 Mandelbrot zoom, and (promoted 2026-08-10) the *Electric !* homage
 (5 → 14 patterns) — plus the **image slideshow, unparked** from
@@ -343,7 +353,23 @@ Verify: rotation sequencing unit-tested at faked timestamps (advance, wrap +
 rescan, empty-folder fallback, mixed alternation), config validation for both
 new keys, run-loop smoke in all three `cycle_content` values.
 
-### R2d — the zoom *(last)*
+### R2d — the zoom *(last)* ✅ shipped 2026-10-26
+
+Built as `mandelbrot`, a pure function like R2a's, in a side session running
+alongside R2c. Each 80 s dive goes from the whole set down to a 1e-12 view,
+easing in, panning onto its target, and fading through black at the reset. The
+five targets are Misiurewicz points found by Newton's method (Seahorse Valley,
+the triple-spiral valley, Elephant Valley, the point i, the antenna), so every
+depth stays busy; the famous hand-picked Seahorse coordinates turned out to be
+solid minibrot by 1e-7. Escape time drops escaped points as it goes and checks
+escape every 6 iterations. The cap rises 20 a decade, and the frame's own
+first escapes set the working budget. Drawn as smooth-coloured contour bands
+spaced by octaves, merging into a solid set, flowing slowly inward. **Julia
+not done:** Mandelbrot only, dives rotating through the five targets. Braille
+computes once per cell and interpolates: measured, full 2×4 costs 18 ms median
+/ 50 ms max a frame for the pattern alone. Timings, the target hunt and the
+precision check are in WORKLOG 2026-10-26; tests are `tests/test_zoom.py`
+plus the contract checks (106 in total). Original plan:
 
 Mandelbrot/Julia endless zoom. Pure `(X, Y, t)` but the heaviest per frame:
 escape-time with early-exit masking, an iteration budget that scales with zoom

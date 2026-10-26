@@ -730,3 +730,167 @@ has braille; it's this laptop's copy that doesn't. README's braille note now
 describes the check. No `.exe`/`.scr` rebuild: the builds keep the old check,
 and draw boxes here, until the end-of-R2 rebuild. TODO's run sheet says so.
 Nothing pushed.
+
+## 2026-10-26 — R2d shipped: the Mandelbrot zoom (13 → 14 patterns)
+
+A side session in its own worktree, alongside R2c, to the R2d spec in TODO.
+The pattern is `mandelbrot`, a pure function of `(X, Y, t, gf)` like R2a's, so
+pause and the throttle cost it nothing. `patterns.py` is the only app file that
+changed.
+
+**The dive** (`_zoom_view(t)`, pure in `t`): 80 s a cycle. Each starts on the
+whole set (a view 3.0 high, centred at −0.6), eases up to speed over 4 s, then
+zooms at a constant rate in log(height) down to a 1e-12 view, about 2× every
+1.9 s. The view pans in as it zooms (the target's offset shrinks as
+height^1.5), so the target is mid-screen within a couple of decades. The reset
+falls on the cycle boundary inside a 1.5 s fade either side; at the default
+density the screen is black for about 1.2 s around the cut, then the whole set
+fades back in. Each cycle takes the next of five targets.
+
+**The targets, found rather than picked.** The spec said to dive at boundary
+points so it never settles into flat inside or outside. The first test of that:
+the much-zoomed Seahorse Valley coordinates (−0.743643887037151 +
+0.131825904205330i) are 100% interior by a 1e-7 view, a minibrot. So the
+targets are Misiurewicz points: c whose critical orbit lands on a repelling
+cycle after k steps, found by Newton's method on z_{k+p}(c) = z_k(c) over grids
+of seeds in each valley. Such a point is on the boundary, and the set is
+asymptotically self-similar around it (Tan Lei), so every depth looks busy.
+The cost of a target is g = p / log10|λ|: iterations added per decade of
+zoom, where λ is the cycle's multiplier. I scored candidates by g and looked at
+a gallery of each at seven depths (1e-1 … 1e-14), then chose five that look
+different from one another:
+
+| target | M(k,p) | \|λ\| | arg λ | g /decade |
+|---|---|---|---|---|
+| Seahorse Valley −0.7958 + 0.1721i | M(18,4) | 24.4 | −0.34π | 2.9 |
+| triple-spiral valley −0.0359 + 0.6551i | M(16,4) | 5.80 | −0.40π | 5.2 |
+| Elephant Valley 0.3890 + 0.1049i | M(10,2) | 5.57 | +0.02π | 2.7 |
+| the point i | M(2,2) | 5.66 | +0.25π | 2.7 |
+| the antenna −1.5437 | M(3,1) | 1.68 | π | 4.4 |
+
+Rejected along the way: an M(23,2) near the seahorse tails (|λ| = 1.04, so
+110 iterations a decade, too dear) and several near-duplicates. Lit fraction
+(after the density crush) stays between about 50% and 85% from the first view
+to the bottom for all five, at the high end only early on, while a big piece
+of interior fills the view.
+
+**Escape time** (`_escape`): complex128 `z = z² + c` in place, escaped points
+dropped from the working arrays as they go. Escape is checked only every 6
+iterations: the smooth count `n + 1 − log2(log|z|)` barely changes once |z|
+is large, so reading it a few iterations late is harmless, and a bailout of 64
+keeps the overshoot finite (64^(2^6) squared is 2^768, under float64's
+2^1024). My first prototype had a bailout of 256 with the same 6, which
+squares to exactly 2^1024 and overflows; I caught it by working the bound
+out, not by any test. The iteration budget has two parts. A cap rises with
+depth (100 + 20 a decade, from 100 at the top to 350 at the bottom) and only
+binds if nothing escapes. The working budget is the frame's first escape
++ 2×40 + 6 iterations, because anything still going past that is drawn as
+solid set anyway. Checked against the textbook loop (every point, every
+iteration, budget 1000) at three depths on all five targets: smooth counts
+agree to under 8e-5, and every point the working budget gave up on would have
+escaped at least 86 counts past the frame's fastest (≥ 80 is solid).
+
+**Colouring.** Smooth escape count, normalised to the frame's own fastest
+escape, so the picture reads the same at every depth. Tried in turn, on
+headless contact sheets: glow only (bright near the set) read as chunky blobs
+at depth. Linear bands every 6 counts gave lovely sweeping equipotentials in
+the open but aliased into noise near the set at cell resolution. Glow × bands
+came out sparse. The one kept: **bands spaced by octaves** of the normalised
+count (`cos 2π(log2(1+d) − 0.2 t)`), merging into solid between 40 and 80
+counts past the fastest. You get wide contour bands out in the open, a solid
+set, and textured fractal edges between, with the bands drifting slowly inward,
+the palette-cycling feel of electric. Unescaped points are solid, so the
+start of each dive is the classic filled silhouette with contour rings around
+it. Ramp looks like a text-mode fractal of old.
+
+**Precision.** The gallery's 1e-13 and 1e-14 columns show where float64 runs
+out. At 1e-14 the two targets with |c| ≥ 1 (i and the antenna, whose ulp is
+twice the others') go visibly blocky, and the rest grain. At 1e-13 everything
+is still clean, at two to four ulps a sample. Resetting at 1e-12 leaves a
+decade of headroom: neighbouring cell samples at the bottom of each dive on a
+full-screen 1920×1080 window at the default font are 43 ulps apart (i, the
+antenna) to 170 (Elephant Valley). A test pins ≥ 32.
+
+**Timings** (this laptop, headless `SDL_VIDEODRIVER=dummy`, 1920×1080 at
+font 16 = 192×56 cells, braille 384×224; 200 frames per arm spread over all
+five dives, arms interleaved frame by frame because this machine has two
+speeds):
+
+| field compute only | median | p90 | max |
+|---|---|---|---|
+| cell resolution (dots, ramp) | 2.2 ms | 3.3 | 6.0 |
+| braille, full 2×4 sub-resolution | 18.0 ms | 27.7 | 50.0 |
+| braille as shipped: per cell, interpolated | 4.3 ms | 5.8 | 10.1 |
+
+Full 2×4 can't hold 60 fps (16.7 ms) even before rendering, so **braille
+computes once per cell and interpolates bilinearly up to the braille grid**,
+as the spec's fallback says. The bands are smooth, so the braille threshold
+still cuts sub-cell edges; only the noisiest fractal edges come out a little
+blobby. Whole frames through the real `App` (clear, `_draw_generative`, HUD,
+flip):
+
+| whole frame, median (max) | mandelbrot | plasma | electric | life |
+|---|---|---|---|---|
+| dots | 9.2 ms (15.6) | 6.9 | 7.7 | 7.5 |
+| ramp | 8.6 ms (15.0) | 6.5 | 7.2 | 6.7 |
+| braille | 16.0 ms (36.1) | 9.9 | 20.9 | 20.0 |
+| dots, colour on | 22.9 ms (52.7) | 19.4 | 14.2 | 15.2 |
+
+Dots and ramp hold 60 fps with room to spare (109–117 fps at the median). In
+braille the zoom costs less than electric or Life: what doesn't hold 60 fps
+full-screen at p90 there is the per-cell braille blit, for every busy pattern,
+and the same goes for colour-on dots. That's renderer work, and nothing R2d
+should fix. At the 2 fps throttle the cost is irrelevant. The dive just jumps
+about 20% a frame and every frame is whole; the strip of six consecutive 2 fps
+frames reads as one continuous zoom.
+
+**Eyeballed** on headless contact sheets in all three palettes at t = 3, 20,
+55, 130, 270 and 350 s (four of the five targets), plus Elephant Valley in
+ramp at 170–235 s (its spiral shows at 190), across the reset seam frame by
+frame, and as a 2 fps strip.
+
+**Julia: not done, on purpose.** Mandelbrot only, rotating through five
+targets. Near a Misiurewicz point the Julia set of that c looks like the
+Mandelbrot set there (the same theorem that makes the targets work), so an
+alternating Julia dive would mostly repeat the picture for twice the tuning.
+It stays an option if the field run wants more variety.
+
+**Tests** (`tests/test_zoom.py`, 15): every target really is M(k,p) with a
+repelling cycle and is Newton's root to 1e-15; each dive starts on the whole
+set and ends at the floor on its own target, never backing out; the target
+is mid-screen within the first few decades; the reset falls on the cycle
+boundary, black across the cut and lit either side; float64 headroom at the
+bottom; finite, in range and never flat 1e4 s and 1e6 s in (125 and 12,500
+dives), across every target, at cell and braille resolution; the set itself
+drawn solid; the same `t` gives the same frame whatever ran before; whole
+frames at 2 fps; escape counts against the textbook loop; the depth-scaled
+cap; braille computed once per cell with the corners lined up; bilinear
+upsampling; and real `main()` runs in all three palettes plus a screensaver
+run already throttled to 2 fps. `tests/test_patterns.py` now counts 14 and
+covers the zoom in its draw, purity, density and config checks. **106 pass**
+(91 before), under pytest and standalone. Mutation check: 17 hand-written
+mutants (target typos at 1e-8 and 1e-13, too deep a floor, no fade, no pan,
+one target forever, integer counts, smooth count off by one, too tight a
+budget, a flat cap, no normalisation, full-res braille, nearest-neighbour
+upsampling, overflowing checks, the set drawn dark, missing from `PATTERNS`).
+Two lived at first, the set drawn dark and a last-digit target typo; I added
+the solid-set test and the Newton-root check. After that only the last-digit
+typo lives. That one is a 1-ulp nudge, inside float64's rounding of the true
+root, so it's no test gap.
+
+**Found in passing:** the session's very first numpy script, run from the
+Bash tool, died with OpenBLAS "Memory allocation still failed after 10
+retries". With `OPENBLAS_NUM_THREADS=1` it ran, and later plain runs (the
+whole suite included) were fine: transient, likely memory pressure with
+sibling sessions running. Noted in the notebook, not an app problem.
+
+**A possible follow-up, not needed now:** at depth nearly every iteration is
+shared. A frame's median escape count sits only 5–10 above its fastest, at
+45–80. Series approximation (skipping the shared prefix from a reference orbit)
+could make full-resolution braille affordable. It's subtle, glitch handling
+included, and the per-cell fallback looks good, so it's left alone.
+
+**Not tested here:** a real screen. That means how the dive feels in motion
+(pace, shimmer near the set), real fps, and a real screensaver run. No
+`.exe`/`.scr` rebuild: that's the one at the end of R2. TODO's run sheet gains
+the zoom checks. Nothing pushed.

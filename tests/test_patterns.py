@@ -2,10 +2,10 @@
 
 Every pattern must return a clean brightness field at any grid size, including
 braille sub-resolution and the 1x1 grid the app briefly holds at startup. The
-R2a batch must stay *pure* functions of ``(X, Y, t, gf)``; R2b's stateful pair
-are callable objects with ``reset()`` (their sim behaviour is in
-``test_stateful.py``). Runs under pytest, or standalone with
-``python tests/test_patterns.py``.
+R2a batch and R2d's zoom must stay *pure* functions of ``(X, Y, t, gf)``;
+R2b's stateful pair are callable objects with ``reset()`` (their sim behaviour
+is in ``test_stateful.py``, the zoom's dives in ``test_zoom.py``). Runs under
+pytest, or standalone with ``python tests/test_patterns.py``.
 """
 
 import os
@@ -28,6 +28,7 @@ from asciiviz.generative import GenerativeField  # noqa: E402
 
 R2A = ("rain", "lava", "tunnel", "galaxy", "fireflies", "electric")
 R2B = ("fire", "life")
+R2D = ("mandelbrot",)
 ORIGINALS = ("dotfield", "plasma", "ripples", "flow", "starfield")
 
 
@@ -59,16 +60,17 @@ def test_names_are_unique_and_dotfield_still_first():
     assert names[0] == "dotfield"          # the default the app starts on
 
 
-def test_r2a_and_r2b_are_present_and_originals_survived():
+def test_r2a_r2b_and_r2d_are_present_and_originals_survived():
     names = {n for n, _ in patterns.PATTERNS}
-    for n in R2A + R2B + ORIGINALS:
+    for n in R2A + R2B + R2D + ORIGINALS:
         assert n in names, f"{n} missing from PATTERNS"
-    assert len(patterns.PATTERNS) == 13
+    assert len(patterns.PATTERNS) == 14
 
 
 def test_only_the_stateful_pair_is_stateful():
     # R2b widened the contract without touching the eleven existing patterns:
     # those stay plain functions, and only fire and life carry a reset().
+    # R2d's zoom is a plain function again.
     for name, fn in patterns.PATTERNS:
         if name in R2B:
             assert callable(fn) and callable(getattr(fn, "reset", None)), name
@@ -83,7 +85,7 @@ def test_each_field_runs_its_own_copy_of_a_sim():
     for name in R2B:
         sa, sb = dict(a.patterns)[name], dict(b.patterns)[name]
         assert sa is not sb and sa is not proto[name], name
-    for name in R2A + ORIGINALS:              # plain functions are just shared
+    for name in R2A + R2D + ORIGINALS:        # plain functions are just shared
         assert dict(a.patterns)[name] is proto[name]
 
 
@@ -115,7 +117,7 @@ def test_every_pattern_survives_a_1x1_grid():
 
 
 def test_new_patterns_actually_draw_something():
-    for name in R2A:
+    for name in R2A + R2D:
         f = field(name, 9.0)
         assert (f > 0.02).any(), f"{name} rendered an empty frame"
 
@@ -140,7 +142,7 @@ def test_the_sims_draw_on_their_very_first_frame():
 # --------------------------------------------------------------------------- #
 
 def test_patterns_are_pure_functions_of_time():
-    for name in R2A:
+    for name in R2A + R2D:
         a = field(name, 12.34)
         b = field(name, 12.34)
         assert np.array_equal(a, b), f"{name} is not deterministic in t"
@@ -159,7 +161,7 @@ def test_the_sims_are_deterministic_for_the_same_timestamps():
 def test_density_still_thins_the_new_patterns():
     # The shared density shaping must keep working across the batch. A sim's
     # frame is redrawn here at the same t, so it doesn't advance in between.
-    for name in ("rain", "tunnel", "electric") + R2B:
+    for name in ("rain", "tunnel", "electric") + R2B + R2D:
         gf = GenerativeField(48, 18, 1.9, density=0.9)
         gf.set_pattern(name)
         for i in range(181):
@@ -184,6 +186,10 @@ def test_config_accepts_the_new_names():
         {"pattern": "fire", "cycle_patterns": ["fire", "life"]})
     assert problems == [] and values["cycle_patterns"] == ["fire", "life"]
     assert "fire" in config.pattern_names() and "life" in config.pattern_names()
+    values, problems = config.validate(
+        {"pattern": "mandelbrot", "cycle_patterns": ["mandelbrot", "electric"]})
+    assert problems == [] and values["pattern"] == "mandelbrot"
+    assert "mandelbrot" in config.pattern_names()
 
 
 def test_config_still_rejects_unknown_pattern_names():

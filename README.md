@@ -1,12 +1,14 @@
 # ASCII Visualizer
 
 A pygame screensaver-style ASCII visualizer. It has two modes — a **generative
-idle mode** with thirteen drifting patterns (dot-field, plasma, ripples, flow,
+idle mode** with fourteen drifting patterns (dot-field, plasma, ripples, flow,
 starfield, Matrix rain, a lava lamp, a depth tunnel, a spiral galaxy, drifting
 fireflies, `electric` — an homage to JX Bardant's 1997 *Electric !*
-screensaver, its rotating-palette contour bands reborn in glyphs — and two
-live simulations: PSX Doom's fire and Conway's Life with glowing trails; the
-dot-field is the soft mosaic-of-dots look from the blank Claude window) and an
+screensaver, its rotating-palette contour bands reborn in glyphs — two live
+simulations, PSX Doom's fire and Conway's Life with glowing trails, and an
+endless Mandelbrot zoom that dives a trillion-fold into the set's boundary and
+starts again; the dot-field is the soft mosaic-of-dots look from the blank
+Claude window) and an
 **image-to-ASCII** converter — and three character palettes you can switch
 between live: **dots**, a **grayscale ramp**, and **braille**. Press `G` to
 cycle the generative patterns.
@@ -56,7 +58,7 @@ All options: `--image`, `--video`, `--webcam [INDEX]`, `--mode
 | -------------- | --------------------------------------------------- |
 | `Tab` / `M`    | Switch mode (generative ⇄ image)                    |
 | `1` `2` `3`    | Palette: dots / ramp / braille                      |
-| `G`            | Cycle the 13 generative patterns (see `--list-patterns`)  |
+| `G`            | Cycle the 14 generative patterns (see `--list-patterns`)  |
 | `V`            | Start / stop live webcam (video mode)               |
 | `C`            | Toggle colour (tint glyphs by source / brightness)  |
 | `Space`        | Pause / resume the animation                        |
@@ -203,7 +205,9 @@ downsampled greyscale image. The engine then maps that field to glyphs:
   (` ·.:•●` or ` .:-=+*#%@`).
 - **braille** — the field is sampled at 2×4 the cell resolution and each block
   of sub-pixels is packed into one of the 256 braille glyphs (with optional
-  ordered dithering for smooth tonal images).
+  ordered dithering for smooth tonal images). The Mandelbrot zoom is the one
+  exception: at 2×4 it couldn't hold 60 fps full-screen, so it computes once
+  per cell and interpolates its smooth bands up to the braille grid.
 
 Rendering uses a fast path (one render call per row) for single-colour frames
 and a cached per-cell blit for colour and braille. Static image frames are
@@ -218,7 +222,7 @@ build.ps1            # builds the .exe and/or .scr (build.bat is the double-clic
 asciiviz/
   config.py          # config.json discovery, validation, defaults
   palettes.py        # the three palette definitions
-  patterns.py        # the 13 generative patterns (11 pure functions of x, y, t; fire and life simulate)
+  patterns.py        # the 14 generative patterns (12 pure functions of x, y, t; fire and life simulate)
   engine.py          # brightness-field -> glyphs; image loading
   generative.py      # drives the selected pattern; density/contrast shaping
   video.py           # webcam / video-file capture via OpenCV

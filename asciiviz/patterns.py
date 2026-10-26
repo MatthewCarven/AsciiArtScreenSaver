@@ -19,6 +19,9 @@ The exceptions are R2b's fire and life, which really are simulations. A
 ``PATTERNS`` entry may therefore also be a callable object with a ``reset()``
 method; :class:`Simulation` is the base they share, and it keeps the two
 promises above — pause freezes it, and the throttle only slows it down.
+
+R2d's mandelbrot zoom is a pure function again: where the dive has got to is
+worked out from ``t`` alone, so it too pauses and throttles for free.
 """
 
 from __future__ import annotations
@@ -448,10 +451,147 @@ class Life(Simulation):
         return np.where(self.alive, 1.0, glow).astype(np.float32)
 
 
+# --------------------------------------------------------------------------- #
+# R2d — the zoom (a pure function again, and the heaviest per frame)
+# --------------------------------------------------------------------------- #
+
+# Misiurewicz points M(k, p), found by Newton's method on z_{k+p}(c) = z_k(c):
+# the critical orbit lands on a repelling cycle after k steps. Such a point is
+# on the boundary, and the set around it is self-similar all the way down, so
+# a dive there never opens onto flat inside or flat outside. A point picked by
+# eye isn't safe: the much-zoomed Seahorse Valley spot -0.743643887037151 +
+# 0.131825904205330i is solid minibrot by 1e-7.
+_ZOOM_TARGETS = (
+    complex(-0.79578504006194961, 0.17210759073845566),    # M(18,4) Seahorse Valley
+    complex(-0.035853604601623207, 0.65513747474659378),   # M(16,4) triple-spiral valley
+    complex(0.38901616834394992, 0.10493292907959523),     # M(10,2) Elephant Valley
+    complex(0.0, 1.0),                                     # M(2,2) c = i, a three-way fork
+    complex(-1.5436890126920764, 0.0),                     # M(3,1) out on the antenna
+)
+_ZOOM_CYCLE = 80.0          # seconds per dive, fades included
+_ZOOM_EASE = 4.0            # seconds to get up to speed from the whole-set view
+_ZOOM_FADE = 1.5            # fade out at the bottom, fade back in at the top
+_ZOOM_TOP = 3.0             # view height (short side of the screen) at the top...
+_ZOOM_BOTTOM = 1e-12        # ...and at the reset, a decade before float64 shows
+_ZOOM_HOME = complex(-0.6, 0.0)   # centre of the whole-set view
+_ZOOM_BAIL = 64.0           # escape radius
+_ZOOM_CHECK = 6             # iterations between escape checks: 64**(2**6) squared
+                            # is still under float64's limit, so nothing overflows
+_ZOOM_SOLID = 40.0          # escape counts past the frame's fastest where the
+                            # bands begin to merge into solid set
+_ZOOM_FLOW = 0.2            # band cycles per second, flowing in toward the set
+
+
+def _zoom_view(t):
+    """Where the dive is at time ``t``: ``(centre, height, fade, depth)``.
+
+    Each cycle starts on the whole set and dives at constant speed in
+    log(height) into the next target, easing in over the first few seconds.
+    ``height`` is the view's short side in the complex plane, ``depth`` the
+    decades dived so far. The view pans in as it zooms (the target's offset
+    shrinks as height**1.5), so the target reaches mid-screen within the first
+    couple of decades. The reset at the bottom falls inside a fade to black.
+    """
+    lap = np.floor(t / _ZOOM_CYCLE)
+    tau = t - lap * _ZOOM_CYCLE
+    target = _ZOOM_TARGETS[int(lap) % len(_ZOOM_TARGETS)]
+    rate = np.log(_ZOOM_TOP / _ZOOM_BOTTOM) / (_ZOOM_CYCLE - 0.5 * _ZOOM_EASE)
+    if tau < _ZOOM_EASE:
+        dive = rate * tau * tau / (2.0 * _ZOOM_EASE)
+    else:
+        dive = rate * (tau - 0.5 * _ZOOM_EASE)
+    height = _ZOOM_TOP * np.exp(-dive)
+    centre = target + (_ZOOM_HOME - target) * (height / _ZOOM_TOP) ** 1.5
+    fade = min(1.0, tau / _ZOOM_FADE, (_ZOOM_CYCLE - tau) / _ZOOM_FADE)
+    return centre, height, fade, dive / np.log(10.0)
+
+
+def _escape(c, cap):
+    """Smooth escape count of each point of the 1-D complex array ``c``.
+
+    ``inf`` where a point hasn't escaped by the time the budget runs out.
+    Escaped points are dropped from the working arrays as they go, so a
+    frame costs what its slowest points need, not ``cap`` times every point.
+    Escape is only checked every ``_ZOOM_CHECK`` iterations, which is fine:
+    ``n - log2(log|z_n|)`` barely changes once ``|z|`` is large, so it reads
+    the same a few iterations late.
+
+    ``cap`` rises with depth, but the working budget is set by the frame
+    itself: anything still going ``2 * _ZOOM_SOLID`` iterations after the
+    first escapes would be drawn as solid set anyway, so it stops there.
+    """
+    mu = np.full(c.shape, np.inf)
+    idx = np.arange(c.size)
+    z, cc = c.copy(), c.copy()
+    n, budget = 1, cap
+    while n < budget and idx.size:
+        steps = min(_ZOOM_CHECK, budget - n)
+        for _ in range(steps):
+            np.square(z, out=z)
+            z += cc
+        n += steps
+        m2 = z.real * z.real + z.imag * z.imag
+        out = m2 > _ZOOM_BAIL * _ZOOM_BAIL
+        if out.any():
+            if budget == cap:
+                budget = min(cap, n + int(2 * _ZOOM_SOLID) + _ZOOM_CHECK)
+            mu[idx[out]] = n + 1 - np.log2(0.5 * np.log(m2[out]))
+            keep = ~out
+            idx, z, cc = idx[keep], z[keep], cc[keep]
+    return mu
+
+
+def _upsample(a, h, w):
+    """Bilinear resize of a 2-D array to ``(h, w)``, corners kept on corners
+    (the way ``np.linspace`` grids line up across resolutions)."""
+    def axis(n_in, n_out):
+        f = np.linspace(0.0, n_in - 1.0, n_out)
+        i0 = np.minimum(f.astype(np.intp), max(n_in - 2, 0))
+        return i0, np.minimum(i0 + 1, n_in - 1), f - i0
+    r0, r1, fy = axis(a.shape[0], h)
+    c0, c1, fx = axis(a.shape[1], w)
+    a = a[r0] * (1.0 - fy)[:, None] + a[r1] * fy[:, None]
+    return a[:, c0] * (1.0 - fx) + a[:, c1] * fx
+
+
+def mandelbrot(X, Y, t, gf):
+    """An endless Mandelbrot zoom: dive after dive into the boundary.
+
+    Escape time with smooth colouring, drawn as contour bands. A pixel's
+    smooth escape count is taken relative to the frame's fastest escape, so
+    the picture reads the same at every depth, and bands are spaced by
+    octaves of it: wide sweeping equipotentials out in the open, merging
+    into a solid set near the boundary, where finer bands would only
+    alias. The bands drift slowly inward, palette-cycling style.
+
+    Braille asks for 2x4 samples a cell, and full-screen that can't hold
+    60 fps (WORKLOG 2026-10-26), so this computes one sample per cell and
+    interpolates up. The bands are smooth, so braille still gets sub-cell
+    edges from the threshold.
+    """
+    centre, height, fade, depth = _zoom_view(t)
+    h, w = X.shape
+    rows, cols = min(h, gf.rows), min(w, gf.cols)
+    xs = np.linspace(float(X[0, 0]), float(X[0, -1]), cols)
+    ys = np.linspace(float(Y[0, 0]), float(Y[-1, 0]), rows)
+    W, H = gf.width_span, gf.height_span
+    scale = height / max(min(W, H), 1e-9)
+    c = centre + scale * ((xs - 0.5 * W)[None, :] + 1j * (0.5 * H - ys)[:, None])
+    mu = _escape(c.ravel(), int(100 + 20 * depth)).reshape(rows, cols)
+    out = np.isfinite(mu)
+    d = np.where(out, mu - (mu[out].min() if out.any() else 0.0), 2.0 * _ZOOM_SOLID)
+    bands = 0.5 + 0.5 * np.cos(2.0 * np.pi * (np.log2(1.0 + d) - _ZOOM_FLOW * t))
+    solid = np.clip(d / _ZOOM_SOLID - 1.0, 0.0, 1.0)
+    v = (bands + (1.0 - bands) * solid) * fade
+    if (rows, cols) != (h, w):
+        v = _upsample(v, h, w)
+    return v.astype(np.float32)
+
+
 # Order defines the cycle order of the G key. dotfield stays first (default);
 # the R2a batch follows the originals with electric as its finale, then R2b's
-# stateful pair. Stateful entries are prototypes: each GenerativeField runs its
-# own copy.
+# stateful pair, then R2d's zoom. Stateful entries are prototypes: each
+# GenerativeField runs its own copy.
 PATTERNS = [
     ("dotfield", dotfield),
     ("plasma", plasma),
@@ -466,4 +606,5 @@ PATTERNS = [
     ("electric", electric),
     ("fire", Fire(seed=1993)),
     ("life", Life(seed=1970)),
+    ("mandelbrot", mandelbrot),
 ]
