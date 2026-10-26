@@ -82,7 +82,7 @@ bottom line should show that path. Worth trying deliberately:
   matters** — a screensaver that won't start gives you no error at all, just
   nothing, so it must never die on a bad file.
 - `"cycle_patterns": ["plasma", "ripples"]` → the screensaver rotates only
-  those two, while `G` still reaches all five.
+  those two, while `G` still reaches all eleven.
 
 Note: `%APPDATA%` is the right home for this file. "Beside the program" also
 works, but for an installed `.scr` that means `System32`, which needs admin.
