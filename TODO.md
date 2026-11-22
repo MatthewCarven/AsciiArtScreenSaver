@@ -226,18 +226,19 @@ reads first. Rough notes are fine; no need to diagnose it.
       convert, which decodes at 1/2, 1/4 or 1/8 scale (the target is only a
       few hundred pixels across). Not the image-surface cache, which stays
       as decided.
-- [ ] **Fire's sparks reach the top edge in a small window** (from
+- [x] **Fire's sparks reach the top edge in a small window** — *left as
+      it is, Matthew's call 2026-11-22.* (From
       Matthew's screenshot 2026-11-22: windowed, ramp, colour on, a 110×36
-      grid, 61 fps). The cooling is a coin flip per row, so how far heat
+      grid, 61 fps.) The cooling is a coin flip per row, so how far heat
       survives spreads like a binomial, and the spread is wider on short
       grids (∝ 1/√rows). `Fire.draw()` lifts any heat above zero to a
       visible glyph, so every survivor shows. Share of cells lit in the top
       10% of the screen, measured over 30 s of burning: **5.6%** at 110×36,
       2.7% full-screen ramp (192×56), 0.1% full-screen braille. R2b was
       tuned at 1920×1080, so the default window is the noisiest case.
-      Likely fix: taper the lift over the top ~15% of rows, or cool with
-      less variance on short grids; check the tips still fade rather than
-      cut off. New code, so it needs a rebuild.
+      If it's ever wanted: taper the lift over the top ~15% of rows, or
+      cool with less variance on short grids; check the tips still fade
+      rather than cut off.
 
 ---
 
