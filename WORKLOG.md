@@ -1017,3 +1017,34 @@ sessions' text is kept, R2c's entry first since it landed first). R2c's
 zoom's throttled screensaver test now runs under R2c's mixed rotation. **135
 pass** on the merged tree. With R2a–R2d all in, R2 is complete; the one rebuild
 of both binaries is next, and that's Matthew's to run.
+
+## 2026-11-22 — The rebuild is in; fire's sparks in a small window
+
+**The end-of-R2 rebuild happened.** `ASCIIVisualizer.exe` and `.scr` are
+dated 2026-11-22 21:04 (73.3 MB and 38.0 MB), and
+`ASCIIVisualizer.exe --list-patterns` lists all 14, `mandelbrot` included.
+`main` was at `7e50745` (R2 complete) the whole time, so they carry all of R2
+and the braille font fix. TODO's run sheet no longer says the builds predate
+anything.
+
+**Matthew sent a screenshot of fire:** windowed, ramp, colour on, a 110×36
+grid at 16 px, 61 fps on the HUD. It's burning and the ember colours are
+right, but faint glyphs are scattered right up to the top edge, behind the
+HUD. Measured headlessly (scratch script, `Fire` driven at 60 fps for 40 s,
+lit = heat > 0, averaged after 10 s):
+
+| grid | top 0–10% | 10–20% | 20–30% | 30–50% | 50–70% | 70–100% |
+|---|---|---|---|---|---|---|
+| window ramp 110×36 | 5.6% | 14.6% | 29.4% | 60.9% | 95.2% | 100% |
+| full-screen ramp 192×56 | 2.7% | 9.6% | 24.6% | 61.0% | 96.3% | 100% |
+| full-screen braille 384×224 | 0.1% | 2.3% | 15.3% | 61.1% | 98.1% | 100% |
+
+So the screenshot is the design working as built, not a fault: cooling is a
+coin flip per row scaled so the *average* flame reaches `REACH` = 70% of the
+height at any size, but how far the lucky ones get spreads like a binomial,
+and that spread is relatively wider the fewer rows there are (∝ 1/√rows).
+`Fire.draw()` then lifts every cell with any heat to at least 0.42, a visible
+glyph (the R2b fix for the tips hiding under the density crush). R2b tuned
+it at 1920×1080, where braille has almost no stragglers; the default window
+is the noisiest case. Logged in TODO's "Found in passing" with two likely
+fixes. Nothing changed in the code.

@@ -16,8 +16,9 @@ check fixed 2026-10-26** (it was passing a font whose braille is a box; also
 waits for that rebuild). **R2c shipped 2026-10-26**: the screensaver
 alternates patterns and your images by default (`cycle_content`, `images_dir`);
 also waits for the rebuild. **R2d shipped 2026-10-26** — the Mandelbrot zoom,
-14 patterns now (also waits for that rebuild). **That completes R2**: the one
-rebuild of both binaries is next, then R3 and R4.
+14 patterns now (also waits for that rebuild). **That completes R2.** **Both
+binaries rebuilt 2026-11-22** with all of it (the `.exe` lists all 14
+patterns); R3 and R4 are next.
 
 ---
 
@@ -37,11 +38,9 @@ build.bat
 Double-click it: it builds both `ASCIIVisualizer.exe` (the app) and
 `ASCIIVisualizer.scr` (2026-10-15; `build.bat app` or `build.bat screensaver`
 builds just one). Right-click the new `.scr` → **Install**. This is the last
-rebuild you should need for a settings change. *Both are already built (the
-`.exe` on 2026-10-26, the `.scr` on 2026-10-15), so you can go straight to
-Install — but they predate R2b–R2d, so fire, Life, the slideshow and the
-Mandelbrot zoom are only in `python main.py` until the one rebuild at the end
-of R2.* Every other step below works with
+rebuild you should need for a settings change. *Both were rebuilt on
+2026-11-22 with all of R2 (fire, Life, the slideshow, the zoom and the braille
+font fix), so you can go straight to Install.* Every other step below works with
 `ASCIIVisualizer.exe` in place of `python main.py`, and it's worth trying both
 at least once.
 
@@ -83,8 +82,7 @@ python main.py
   braille now comes from DejaVu Sans (elsewhere on Windows, Segoe UI Symbol):
   expect real dots, not empty boxes, and a toast only if no font has them.
   Worth a look at a few font sizes (`[`/`]`) to see the dots read evenly.
-  *The built `.exe` and `.scr` predate that fix, so they still draw boxes
-  here until the end-of-R2 rebuild.*
+  The `.exe` and `.scr` rebuilt on 2026-11-22 have the fix too.
 - `C` colour, `+`/`-` density, `[`/`]` resolution, `Tab` image mode, `N`/`P`
   through `images/`, `S` saves a PNG to `captures/`.
 - HUD should fade after 15 s of no input and relight the instant you touch
@@ -149,9 +147,8 @@ python main.py --screensaver --cycle-seconds 8
   until a folder is named, or leave it.
 - `"cycle_content": "images"` is a pure slideshow; `"patterns"` is the old
   behaviour. An empty or missing folder should give patterns, never black.
-- The built `.exe` / `.scr` predate R2c. Until the end-of-R2 rebuild they
-  report `cycle_content` and `images_dir` as unknown settings (a toast) and
-  ignore them.
+- The `.exe` / `.scr` rebuilt on 2026-11-22 understand both settings. Older
+  builds report them as unknown (a toast) and ignore them.
 
 ### 4. The Settings button
 
@@ -188,6 +185,9 @@ reads first. Rough notes are fine; no need to diagnose it.
       `.exe` too); the build has R1 and R2a in it. Right-click → **Install** is
       still yours to do. No more rebuilds for settings; new code (R2b–R2d)
       gets one at the end of R2.
+- [x] **The end-of-R2 rebuild.** Both binaries rebuilt 2026-11-22 21:04;
+      `ASCIIVisualizer.exe --list-patterns` lists all 14. Right-click the
+      new `.scr` → **Install** to put it in place of the old one.
 - [x] `Claude.md` showed as modified (line endings only). Resolved by
       2026-10-26: `core.autocrlf` is `true` now and git sees it clean.
 
@@ -216,8 +216,8 @@ reads first. Rough notes are fine; no need to diagnose it.
       unrotated. It matters more now that the slideshow is meant for a folder
       of real photos. Likely fix: `ImageOps.exif_transpose(img)` before the
       convert, plus a test with a tagged image. It affects `N`/`P` and
-      `--image` too, all for the better. New code, so it rides the end-of-R2
-      rebuild.
+      `--image` too, all for the better. New code, so it needs a rebuild
+      (the end-of-R2 one, 2026-11-22, went ahead without it).
 - [ ] **Big photos are slow to load** (measured 2026-10-26 during R2c, this
       laptop): about 40 ms for 1920×1080, 210 ms for a 12 MP 4032×3024 JPEG,
       400 ms for 24 MP. The animation stalls that long as each photo arrives,
@@ -226,6 +226,18 @@ reads first. Rough notes are fine; no need to diagnose it.
       convert, which decodes at 1/2, 1/4 or 1/8 scale (the target is only a
       few hundred pixels across). Not the image-surface cache, which stays
       as decided.
+- [ ] **Fire's sparks reach the top edge in a small window** (from
+      Matthew's screenshot 2026-11-22: windowed, ramp, colour on, a 110×36
+      grid, 61 fps). The cooling is a coin flip per row, so how far heat
+      survives spreads like a binomial, and the spread is wider on short
+      grids (∝ 1/√rows). `Fire.draw()` lifts any heat above zero to a
+      visible glyph, so every survivor shows. Share of cells lit in the top
+      10% of the screen, measured over 30 s of burning: **5.6%** at 110×36,
+      2.7% full-screen ramp (192×56), 0.1% full-screen braille. R2b was
+      tuned at 1920×1080, so the default window is the noisiest case.
+      Likely fix: taper the lift over the top ~15% of rows, or cool with
+      less variance on short grids; check the tips still fade rather than
+      cut off. New code, so it needs a rebuild.
 
 ---
 
@@ -453,7 +465,8 @@ and upsamples for braille — measured, not guessed.
 ### After R2
 
 One `.scr` rebuild picks up all of it — new *code* needs a rebuild, settings
-never do (R1's whole point). Fold that rebuild into the still-open field run,
+never do (R1's whole point). *Done 2026-11-22: both binaries rebuilt.* Fold
+that rebuild into the still-open field run,
 whose sheet gains: `G` through 14 patterns, mixed rotation against a folder of
 real photos (step 3b, there since R2c), rain/fire/Life watched at both
 60 fps and the 2 fps throttle, and a whole Mandelbrot dive (step 1).
