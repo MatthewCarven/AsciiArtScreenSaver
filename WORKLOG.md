@@ -1048,3 +1048,30 @@ glyph (the R2b fix for the tips hiding under the density crush). R2b tuned
 it at 1920×1080, where braille has almost no stragglers; the default window
 is the noisiest case. Logged in TODO's "Found in passing" with two likely
 fixes. Nothing changed in the code.
+
+## 2026-11-25 — Phone photos come out upright
+
+The R2c find, fixed as logged. Phones store the sensor's pixels as they came
+and add an EXIF orientation tag saying how to turn them for viewing;
+`engine.load_image_fields` ignored the tag, so an upright phone photo showed
+sideways. A new `engine._upright` runs `ImageOps.exif_transpose(img,
+in_place=True)` before the RGB convert. It's the only place the app opens an
+image, so `N`/`P`, `--image` and the slideshow all get it. If the tag is
+broken, `exif_transpose` can raise; the photo is then shown as stored rather
+than failing to load.
+
+**Tests:** `tests/test_images.py`, 6 tests. Each photo is stored landscape,
+white on the left, and where the white lands shows the turn: untagged and
+tag 1 as stored, tag 6 (the usual phone portrait) white on top and portrait
+shaped, tag 8 white at the bottom, tag 3 white on the right, and a raising
+`exif_transpose` falls back to as stored. Each is checked in both the simple
+and the braille field. With `_upright` switched off, the tag 3, 6 and 8 tests
+fail. **141 pass** (135 before).
+
+**Cost** (12 MP JPEG, median of 7, this laptop): untagged 222 → 227 ms (noise),
+tagged 209 → 252 ms, the turn itself. So a phone portrait loads about 40 ms
+slower; the slow-load item in TODO is unchanged and still only worth doing if
+the field run notices.
+
+New code, so the `.exe` / `.scr` built 2026-11-22 don't have it; the next
+rebuild picks it up. TODO's run sheet (step 3b) says so.

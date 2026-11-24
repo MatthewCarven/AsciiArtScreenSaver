@@ -18,7 +18,9 @@ alternates patterns and your images by default (`cycle_content`, `images_dir`);
 also waits for the rebuild. **R2d shipped 2026-10-26** — the Mandelbrot zoom,
 14 patterns now (also waits for that rebuild). **That completes R2.** **Both
 binaries rebuilt 2026-11-22** with all of it (the `.exe` lists all 14
-patterns); R3 and R4 are next.
+patterns). **Photo rotation fixed 2026-11-25**: phone photos come out
+upright (in `python main.py`; the builds get it at the next rebuild). R3 and
+R4 are next.
 
 ---
 
@@ -134,9 +136,10 @@ python main.py --screensaver --cycle-seconds 8
 - Pattern → photo → next pattern → next photo, each photo dissolving in.
 - Drop a new photo into the folder while it runs. It should turn up on the
   next lap, once every photo already there has had a turn.
-- **Phone photos taken upright may come out sideways.** The loader ignores the
-  EXIF orientation tag (checked 2026-10-26; under "Found in passing" below).
-  Worth noting whether any of yours do it.
+- **Phone photos should come out upright**, portrait ones included. The
+  loader ignored their rotation tag until 2026-11-25, so in the `.exe` /
+  `.scr` built 2026-11-22 they can still come out sideways; `python main.py`
+  has the fix. Say if any photo still lands the wrong way round.
 - **Each photo stalls the animation briefly as it loads**: on this laptop about
   40 ms for a 1080p picture, 200 ms for a 12 MP phone photo, 400 ms for 24 MP.
   The dissolve starts that much of the way in. Say if the hitch shows.
@@ -209,7 +212,7 @@ reads first. Rough notes are fine; no need to diagnose it.
       alpha. Braille now comes from DejaVu Sans here, and headless renders
       show real dots on an even grid. `tests/test_renderer.py`; WORKLOG
       2026-10-26 has the measurements.
-- [ ] **Photos ignore their EXIF orientation** (found 2026-10-26 during R2c).
+- [x] **Photos ignore their EXIF orientation** (found 2026-10-26 during R2c).
       `engine.load_image_fields` does `Image.open(path).convert("RGB")`, so a
       phone photo stored landscape with an "upright" tag shows sideways. That
       was checked with a tagged test JPEG (orientation 6): it came out
@@ -218,6 +221,10 @@ reads first. Rough notes are fine; no need to diagnose it.
       convert, plus a test with a tagged image. It affects `N`/`P` and
       `--image` too, all for the better. New code, so it needs a rebuild
       (the end-of-R2 one, 2026-11-22, went ahead without it).
+      **Fixed 2026-11-25** as suggested: `engine._upright` applies
+      `ImageOps.exif_transpose`, and a broken tag shows the photo as stored
+      rather than losing it. `tests/test_images.py`. Not in the builds until
+      the next rebuild.
 - [ ] **Big photos are slow to load** (measured 2026-10-26 during R2c, this
       laptop): about 40 ms for 1920×1080, 210 ms for a 12 MP 4032×3024 JPEG,
       400 ms for 24 MP. The animation stalls that long as each photo arrives,

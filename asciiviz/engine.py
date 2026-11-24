@@ -14,9 +14,9 @@ import numpy as np
 from . import palettes
 
 try:
-    from PIL import Image
+    from PIL import Image, ImageOps
 except Exception:  # pragma: no cover - Pillow is required for image mode only
-    Image = None
+    Image = ImageOps = None
 
 
 # --------------------------------------------------------------------------- #
@@ -115,6 +115,21 @@ def _placement(iw: int, ih: int, cols: int, rows: int, cell_aspect: float):
     return ncols, nrows, ox, oy
 
 
+def _upright(img):
+    """Turn a photo the way its EXIF orientation tag says is up.
+
+    Phones store the sensor's pixels as they came and add a tag saying how to
+    rotate them for viewing, so without this an upright phone photo is drawn
+    sideways. A broken tag isn't worth losing the picture over: it's shown as
+    stored instead.
+    """
+    try:
+        ImageOps.exif_transpose(img, in_place=True)
+    except Exception:
+        pass
+    return img
+
+
 def load_image_fields(path, cols: int, rows: int, cell_aspect: float, braille: bool):
     """Load an image into brightness + colour fields fitted to the grid.
 
@@ -129,7 +144,7 @@ def load_image_fields(path, cols: int, rows: int, cell_aspect: float, braille: b
     if Image is None:
         raise RuntimeError("Pillow is not installed; image mode is unavailable.")
 
-    img = Image.open(path).convert("RGB")
+    img = _upright(Image.open(path)).convert("RGB")
     iw, ih = img.size
     ncols, nrows, ox, oy = _placement(iw, ih, cols, rows, cell_aspect)
 
