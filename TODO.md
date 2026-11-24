@@ -19,8 +19,8 @@ also waits for the rebuild. **R2d shipped 2026-10-26** — the Mandelbrot zoom,
 14 patterns now (also waits for that rebuild). **That completes R2.** **Both
 binaries rebuilt 2026-11-22** with all of it (the `.exe` lists all 14
 patterns). **Photo rotation fixed 2026-11-25**: phone photos come out
-upright (in `python main.py`; the builds get it at the next rebuild). R3 and
-R4 are next.
+upright, and both binaries were rebuilt the same day to include it. R3 and R4
+are next.
 
 ---
 
@@ -40,9 +40,10 @@ build.bat
 Double-click it: it builds both `ASCIIVisualizer.exe` (the app) and
 `ASCIIVisualizer.scr` (2026-10-15; `build.bat app` or `build.bat screensaver`
 builds just one). Right-click the new `.scr` → **Install**. This is the last
-rebuild you should need for a settings change. *Both were rebuilt on
-2026-11-22 with all of R2 (fire, Life, the slideshow, the zoom and the braille
-font fix), so you can go straight to Install.* Every other step below works with
+rebuild you should need for a settings change. *Both were last rebuilt on
+2026-11-25 with all of R2 (fire, Life, the slideshow, the zoom and the braille
+font fix) and the photo-rotation fix, so you can go straight to Install.*
+Every other step below works with
 `ASCIIVisualizer.exe` in place of `python main.py`, and it's worth trying both
 at least once.
 
@@ -137,9 +138,10 @@ python main.py --screensaver --cycle-seconds 8
 - Drop a new photo into the folder while it runs. It should turn up on the
   next lap, once every photo already there has had a turn.
 - **Phone photos should come out upright**, portrait ones included. The
-  loader ignored their rotation tag until 2026-11-25, so in the `.exe` /
-  `.scr` built 2026-11-22 they can still come out sideways; `python main.py`
-  has the fix. Say if any photo still lands the wrong way round.
+  loader ignored their rotation tag until 2026-11-25; `python main.py` and
+  the `.exe` / `.scr` rebuilt that day have the fix (builds from before it
+  can still show them sideways). Say if any photo still lands the wrong way
+  round.
 - **Each photo stalls the animation briefly as it loads**: on this laptop about
   40 ms for a 1080p picture, 200 ms for a 12 MP phone photo, 400 ms for 24 MP.
   The dissolve starts that much of the way in. Say if the hitch shows.
@@ -189,8 +191,9 @@ reads first. Rough notes are fine; no need to diagnose it.
       still yours to do. No more rebuilds for settings; new code (R2b–R2d)
       gets one at the end of R2.
 - [x] **The end-of-R2 rebuild.** Both binaries rebuilt 2026-11-22 21:04;
-      `ASCIIVisualizer.exe --list-patterns` lists all 14. Right-click the
-      new `.scr` → **Install** to put it in place of the old one.
+      `ASCIIVisualizer.exe --list-patterns` lists all 14. Rebuilt again
+      2026-11-25 for the photo-rotation fix. Right-click the new `.scr` →
+      **Install** to put it in place of the old one.
 - [x] `Claude.md` showed as modified (line endings only). Resolved by
       2026-10-26: `core.autocrlf` is `true` now and git sees it clean.
 
@@ -223,8 +226,8 @@ reads first. Rough notes are fine; no need to diagnose it.
       (the end-of-R2 one, 2026-11-22, went ahead without it).
       **Fixed 2026-11-25** as suggested: `engine._upright` applies
       `ImageOps.exif_transpose`, and a broken tag shows the photo as stored
-      rather than losing it. `tests/test_images.py`. Not in the builds until
-      the next rebuild.
+      rather than losing it. `tests/test_images.py`. In both builds since
+      their 2026-11-25 rebuild.
 - [ ] **Big photos are slow to load** (measured 2026-10-26 during R2c, this
       laptop): about 40 ms for 1920×1080, 210 ms for a 12 MP 4032×3024 JPEG,
       400 ms for 24 MP. The animation stalls that long as each photo arrives,

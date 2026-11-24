@@ -1075,3 +1075,13 @@ the field run notices.
 
 New code, so the `.exe` / `.scr` built 2026-11-22 don't have it; the next
 rebuild picks it up. TODO's run sheet (step 3b) says so.
+
+**Rebuilt the same morning** at Matthew's go-ahead (`build.ps1 all`: `.exe`
+30 s, 69.9 MB; `.scr` 22 s, 36.2 MB). Smoke-tested on copies in a scratch
+folder, headless, config pointed into the scratch folder: the `.exe` lists
+all 14 patterns; `--image` on a tag-6 photo, `--pattern mandelbrot --palette
+braille` and the `.scr`'s `/s` all stay up at 10 s; `/p` exits 0 in 1.3 s;
+`images/` appears beside the copies. `pyi-archive_viewer` shows
+`PIL.ImageOps` and `asciiviz.engine` inside both. Not checkable headlessly:
+that the photo *looks* upright on a real screen (the unit tests cover the
+turn itself).
