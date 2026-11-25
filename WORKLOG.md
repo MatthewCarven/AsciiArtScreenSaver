@@ -1085,3 +1085,56 @@ braille` and the `.scr`'s `/s` all stay up at 10 s; `/p` exits 0 in 1.3 s;
 `PIL.ImageOps` and `asciiviz.engine` inside both. Not checkable headlessly:
 that the photo *looks* upright on a real screen (the unit tests cover the
 turn itself).
+
+## 2026-11-25 — R3 scoped with Matthew (planning only, no code)
+
+Matthew asked to scope R3. Before asking, I read how colour works now:
+- Patterns with colour on use a two-stop gradient: blue by default, with
+  `_GEN_GRADIENTS` overrides for fire and Life.
+- Braille patterns are always one colour.
+- Photos and video with colour on show their own colours.
+- The background is a fixed near-black, and `Renderer` holds the colour-off
+  glyph colour.
+- `T` and F1–F8 aren't bound to anything.
+- `config.RESERVED` already lets the keys `themes`, `presets` and `palettes`
+  through silently.
+
+`TODO.md`'s R3 section is now the full plan. The 2026-08-01 sketch is kept
+under it, folded away.
+
+**Decisions (Matthew's, via the question widget)**
+
+- **Themes tint photos and video too**, by brightness, when colour is on.
+  The default theme, classic, is today's look exactly, so nothing changes
+  until a theme is picked.
+- **The theme wins over fire's and Life's own colours.** Classic keeps
+  them as per-pattern overrides, which is R2b's minimal override absorbed
+  as planned on 2026-08-05.
+- **The screensaver rotates presets** with `cycle_presets`, so each turn
+  of the rotation can have its own pattern, palette and theme.
+- **Themes:** classic, white, amber CRT, green phosphor, cream on slate and
+  ice. Matthew added **random**, and on a follow-up question settled what
+  it means: a new pick each time the saver moves on (once at start in the
+  app), never the same theme twice running.
+
+**Defaults I proposed that weren't objected to:**
+- `T` cycles themes.
+- F1–F8 recall a preset and Shift+F1–F8 save one, into an app-managed
+  `presets.json`. `config.json` is never written by the app.
+- Custom palettes go on keys 4–9.
+- Two sessions: R3a (themes and custom palettes), then R3b (presets).
+
+**Small choices of mine, flagged in TODO:**
+- Random also draws from your own themes. Matthew's chosen option said "the
+  built-in themes", so TODO says to tell me if his own should stay out.
+- Random isn't a stop on `T`.
+- A preset holds no mode or fps.
+- Saving a preset refuses if `presets.json` couldn't be read, so a broken
+  file never costs the hand-edited presets in it.
+- Gradient colours are quantised to about 32 steps so the colour-keyed
+  glyph cache doesn't churn.
+- Braille patterns get colour only if full-screen frame times hold, which
+  R3a measures.
+
+State at close: TODO and WORKLOG only, no code touched. Next session starts at
+R3a.

@@ -19,8 +19,11 @@ also waits for the rebuild. **R2d shipped 2026-10-26** — the Mandelbrot zoom,
 14 patterns now (also waits for that rebuild). **That completes R2.** **Both
 binaries rebuilt 2026-11-22** with all of it (the `.exe` lists all 14
 patterns). **Photo rotation fixed 2026-11-25**: phone photos come out
-upright, and both binaries were rebuilt the same day to include it. R3 and R4
-are next.
+upright, and both binaries were rebuilt the same day to include it. **R3
+scoped 2026-11-25** with Matthew: themes recolour everything (photos and fire
+included, with "classic" keeping today's look), there's a random theme, and
+the screensaver can rotate presets. It's split into R3a (themes and custom
+palettes) and R3b (presets). R3a is next, then R4.
 
 ---
 
@@ -484,10 +487,169 @@ real photos (step 3b, there since R2c), rain/fire/Life watched at both
 
 ---
 
-## R3 — Presets, colour themes & custom palettes
+## R3 — Colour themes, custom palettes & presets (scoped 2026-11-25)
 
-Covers the old "palette editor" backlog item, and shares R1's config machinery —
-which is why it sits here rather than first.
+Scoped with Matthew 2026-11-25. Covers the old "palette editor" backlog item
+and builds on R1's config machinery. It's two sessions, themes first because
+a preset includes a theme. Each session ends committed, tested, and
+watchable with `python main.py`; a rebuild of both binaries follows R3b.
+
+**Decisions locked 2026-11-25** (Matthew's calls)
+
+- **Themes tint photos and video too.** With colour on under amber CRT, a
+  photo is drawn in shades of amber by brightness, like an old monochrome
+  screen. The default theme, **classic**, is today's look exactly: blue
+  patterns, ember fire, green Life, photos in their own colours. So one
+  setting governs everything, and nothing changes until you pick a theme.
+- **The theme wins over fire's and Life's own colours.** Under amber,
+  everything is amber. Their colours live on in classic, which carries them
+  as per-pattern overrides: R2b's `_GEN_GRADIENTS`, absorbed and generalised
+  as planned.
+- **The screensaver can rotate presets.** `"cycle_presets": [1, 2, 5]`
+  makes each turn of the rotation its own look (pattern, palette, theme),
+  with photos still in between under mixed.
+- **Built-in themes:** classic, white, amber CRT, green phosphor, cream on
+  slate, ice, plus **random**. `"theme": "random"` picks a theme at random
+  each time the screensaver moves on, never the same one twice running. In
+  the app it picks once at start. A preset can say random too. (It draws
+  from the built-ins and any themes you define. Say if yours should stay
+  out.)
+
+**Defaults set in the scoping** (proposed to Matthew; no objection)
+
+- `T` cycles the named themes. Random is set from the config file,
+  `--theme` or a preset; it isn't a stop on `T`.
+- F1–F8 recall a preset; Shift+F1–F8 save the current state into that slot.
+- Presets live in `presets.json`, which the app writes. `config.json` stays
+  read-only to the app.
+- Custom palettes from the config file go on keys 4–9, in the order they're
+  written.
+- R3a builds themes and custom palettes; R3b builds presets.
+
+### R3a — themes and custom palettes *(first)*
+
+**Themes.** `asciiviz/themes.py` holds them as data. A theme is a
+background, a foreground (for colour off) and a list of gradient stops
+from dark to bright. It can also carry per-pattern stops (classic does,
+for fire and Life) and say whether photos keep their own colours (classic
+does; the others tint).
+
+- **Colour off:** glyphs in the theme's foreground on its background, in
+  every mode.
+- **Colour on:** patterns, and photos and video by brightness, go through
+  the theme's gradient. Classic gives photos their own colours instead.
+- **Multi-stop gradients:** use `np.interp` per channel instead of today's
+  two-stop lerp.
+- **Braille patterns get theme colour too.** Each cell takes the mean of
+  its 2×4 block; braille generative has been single-colour until now.
+  Measure full-screen first. If it can't hold the frame rate, braille
+  patterns stay in the foreground colour.
+- **Quantise gradient colours to about 32 steps.** The glyph cache is keyed
+  by colour, and a smooth gradient would churn it.
+
+Starting colours, to tune by eye in headless renders:
+
+| Theme | Glyphs | Background |
+|---|---|---|
+| amber | `#FFB000` | near-black |
+| phosphor | `#33FF66`-ish | black |
+| cream | `#F2E8CF` | slate `#2B3440` |
+| ice | pale cyan to white | deep navy |
+| white | grey to white | today's background |
+
+Classic must reproduce today's colours exactly: pin it with a test that
+compares renders against the current code (default blue, fire, Life,
+photos).
+
+- `--theme NAME` and `"theme"`, default `"classic"`, validated against the
+  built-ins, your own themes and `random`.
+- Your own themes go in config.json, colours as `"#RRGGBB"`:
+  `"themes": {"dusk": {"bg": "#101018", "fg": "#E0C0FF",
+  "stops": ["#301040", "#E0C0FF"]}}`. A theme of yours with a built-in name
+  replaces the built-in.
+  - A broken theme is reported and skipped, never fatal (R1's rule).
+  - `themes` must be validated before `theme`, and `--theme`'s accepted
+    names are only known after the file is read.
+  - `themes` and `palettes` stop being reserved keys.
+- **Random:** re-pick at each screensaver turn, patterns and photos alike.
+  The HUD shows which theme it picked, e.g. `random: amber`.
+- **A theme change must clear the image cache** (`_img_key` and
+  `_img_surface`), or the theme seems not to apply until you press `N`.
+  It's the same trap `_set_palette` already handles. The renderer's
+  `bg`/`fg` come from the theme. The HUD's own colours stay neutral, and its
+  top line gains `theme: …`.
+
+**Custom palettes, the cheap way.**
+`"palettes": {"blocks": " ░▒▓█"}`: each string runs dark to bright and needs
+at least two characters. They're registered into `_RAMP_STRINGS` and `NAMES`
+at startup, after dots, ramp and braille. Keys 4–9 reach them in the order
+they're written; `--palette` and `"palette"` reach them by name.
+
+- A name that clashes with a built-in palette is reported and skipped.
+- Worth a check like the braille one: a character that draws the same ink
+  as a private-use codepoint is missing from the font, so show a toast.
+- A live in-app ramp editor stays a stretch goal.
+
+Verify:
+- Gradient interpolation and the quantised steps.
+- Classic is pixel-identical to today.
+- Config validation for `themes`, `theme` and `palettes`, including broken
+  entries.
+- The cache clears on a theme change.
+- Random never repeats one theme twice running.
+- Headless renders of each theme in all three palettes, photos included.
+- A frame-time check for braille in colour, full-screen.
+
+### R3b — presets *(second)*
+
+- **A preset holds** pattern, palette, theme, colour, density and font size,
+  plus an optional name. Mode and fps aren't in it: the slideshow and the
+  saver's phases own those.
+- **F1–F8 recall.** On a pattern, everything applies. On a photo, the photo
+  stays and takes the preset's look, and the preset's pattern is waiting
+  when you `Tab` back. A recall that changes palette or font size restarts
+  fire and Life, as any such switch does.
+- **Shift+F1–F8 save.** The toast says what was replaced (`saved F3
+  (replaced "Amber dive")`). The HUD shows the last preset recalled.
+- **`presets.json`** sits beside the config file in effect, or in the
+  per-user folder when there isn't one. The app writes it and you can still
+  hand-edit it.
+  - Written atomically: a temp file, then a replace.
+  - Read tolerantly: a bad file means no presets and a toast, never a
+    crash.
+  - **If the file couldn't be read, saving refuses** rather than overwrite
+    the hand-edited presets in it.
+- **`"cycle_presets": [1, 2, 5]`** (and `--cycle-presets 1,2,5`): each
+  pattern turn of the screensaver applies the next preset, its look and its
+  pattern.
+  - It replaces `cycle_patterns` when both are set (report that).
+  - Under mixed, it goes preset, photo, next preset, next photo. Each photo
+    is drawn in the look of the preset before it.
+  - Empty or broken slots are skipped. If none are usable, it falls back to
+    the normal pattern rotation.
+  - A preset whose theme is random re-picks each time it comes round.
+
+Verify:
+- Saving and recalling round-trip.
+- Atomic write.
+- Saving refuses over a broken file.
+- Recall on a photo versus on a pattern.
+- Rotation sequencing at faked timestamps, in the style of
+  `tests/test_slideshow.py`: presets alone, presets with mixed, empty slots,
+  all slots empty.
+- Config validation for `cycle_presets`.
+
+### After R3
+
+Rebuild both binaries; new code needs it, settings don't. The field run
+gains:
+- `T` through the themes.
+- A photo folder under amber and under classic.
+- A `cycle_presets` rotation.
+- Fire under ice, as a check that the theme really wins.
+
+<details>
+<summary>Original sketch (2026-08-01), kept for reference</summary>
 
 **Colour themes.** Colour is currently three unrelated things: a hardcoded
 two-stop gradient for generative (`_GEN_LOW` → `_GEN_HIGH`, blue-ish), source
@@ -518,6 +680,8 @@ current state into a slot. HUD shows the active preset name.
 UI. 90% of the value comes from a config key — `"palettes": {"blocks": " ░▒▓█"}`
 — registered into `_RAMP_STRINGS` and `NAMES` at startup. Do that first; a live
 in-app ramp editor is a stretch goal, not a prerequisite.
+
+</details>
 
 ---
 
